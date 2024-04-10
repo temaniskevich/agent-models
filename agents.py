@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from settings import settings
+from copy import deepcopy
 
 class HistoryList:
     def __init__(self, values=None, histories=None, history_values=None):
@@ -50,15 +51,21 @@ class HistoryList:
 
 
 class Flow:
-    def __init__(self, flow_type, volume=None):
+    def __init__(self, flow_type, volume=None, rate = settings['cb_rate']):
         self.flow_type = flow_type
         self.volume = volume
+        self.rate = rate
 
         # Депозит или Кредит
         if (flow_type == 'deposit' or 'credit') and volume is None:
-            self.rate = settings['cb_rate']
             self.volume = round(np.random.uniform(settings[f'{flow_type}_volume_bound'][0],
                                                 settings[f'{flow_type}_volume_bound'][1]))
+            self.maturity = random.choice(
+                settings[f'{flow_type}_maturity'])
+            self.payment_period = random.choice(settings['payment_period'])
+            self.days_to_pay = self.payment_period
+
+        elif (flow_type == 'mbk' or 'cb'):
             self.maturity = random.choice(
                 settings[f'{flow_type}_maturity'])
             self.payment_period = random.choice(settings['payment_period'])
@@ -78,9 +85,12 @@ class Flow:
         elif self.flow_type == 'credit':
             self.rate += delta
 
+        assert self.rate > 0.01
+
 
     def _string_representation(self):
-        return f'{self.flow_type.title()} размером {self.volume} рублей, {round(self.rate * 100)}%'
+        return f'{self.flow_type.title()} {round(self.rate * 100)}%'
+       # return f'{self.flow_type.title()} размером {self.volume} рублей, {round(self.rate * 100)}%'
        # return f'{self.flow_type.title()} (тип: {self.flow_type}) сроком погашения {self.maturity} дней, размером {self.volume} рублей, по ставке {self.rate * 100}%, с периодом выплат {self.payment_period} дней'
 
     def __repr__(self):
@@ -94,6 +104,8 @@ class Bank:
     def __init__(self, name):
         self.name = name
         self.cash = 0
+        self.risk_tolerance = np.random.uniform(0,1)
+        self.reserves_to_cb = 0
 
         self.deposits = HistoryList()
         self.credits = HistoryList()
@@ -102,38 +114,55 @@ class Bank:
         self.credit_apps = []
 
         self.cash_history = []
+        self.delta_history = []
+        self.reliability_history = []
+
+        self.delta = 0
 
     def set_reliability(self):
         self.reliability = self.cash / 2e6
+        self.reliability_history.append(self.reliability)
 
     def set_delta(self):
         if self.reliability >= 1:
-            self.delta = 0.03
+            delta = 0.03
         elif self.reliability > 0.75:
-            self.delta = 0.02
+            delta = 0.02
         elif self.reliability > 0.6:
-            self.delta = 0.01
+            delta = 0.01
         else:
-            self.delta = 0
+            delta = 0
+
+        self.delta = delta
+        self.delta_history.append(self.delta)
 
     def validate(self):
         # 1. Принять все депозиты, назначить им ставки
-        for deposit in range(len(self.deposit_apps)):
-            self.deposit_apps[deposit].update_rate(self.delta)
-            self.deposits.append(self.deposit_apps[deposit])
+        for deposit in self.deposit_apps:
+            deposit.update_rate(self.delta)
+            self.deposits.append(deposit)
+            self.reserves_to_cb = settings['cb_reserve_rate'] * deposit.volume
+            self.deposit_apps.clear()
 
+
+        # Принять кредит, если есть кэш на него
         for credit in self.credit_apps:
             credit.update_rate(self.delta)
-            if self.cash >= credit.volume:
+            if self.cash >= credit.volume: # почему-то не работает
                 self.credits.append(credit)
-            else:
-                pass
+                self.cash -= credit.volume
+            elif self.cash < credit.volume:
+                prob = np.random.uniform(0, 0.3)  # генерируем случайную "рисковость" актива
+                if prob <= self.risk_tolerance:  # если его рисковость устраивает банк - выдает кредит
+                    self.credits.append(credit)
+                    self.cash -= credit.volume
+            self.credit_apps.clear()
 
         # 2. Посчитать текущие обязательства
 
         # Кредиты, которые выдаст по заявкам
-        credits_to_give = sum(
-            credit.volume for credit in self.credits)
+        #credits_to_give = sum(
+            #credit.volume for credit in self.credits)
 
         # Проценты по депозитам, которые нужно выплатить сегодня
         deposit_coupon_to_return = sum(
@@ -163,7 +192,9 @@ class Bank:
         deposits_volume_to_return = sum(deposit.volume for deposit in self.deposits_to_return)
 
         # Сумма всех обязательств банка на сегодня
-        self.current_obligations = deposits_volume_to_return + credits_to_give + deposit_coupon_to_return
+        self.current_obligations = deposits_volume_to_return + deposit_coupon_to_return + self.reserves_to_cb
+                                   # + credits_to_give
+
 
 
         # 3. Посчитать текущие притоки
@@ -198,6 +229,8 @@ class Bank:
         self.current_inflows = credits_volume_to_get + credit_coupon_to_get + deposits_to_get
 
 
+
+
     def solve(self):
         self.cash += self.current_inflows
         self.cash -= self.current_obligations
@@ -207,6 +240,10 @@ class Bank:
         else:
             self.solved = False
 
+        #assert self.solved == True
+
+        if not self.solved:  # если не может покрыть долги сам - идет на МБК
+            self.loan_amount = - self.cash + np.random.randint(1e6, 10e6)
 
     def restart(self):
         # Обновим историю в кредитах и депозитах
@@ -227,6 +264,10 @@ class Bank:
         self.deposits_to_return = []
         self.credits_to_get = []
 
+        self.set_reliability()
+        #self.set_delta()
+
+
 
 
     def get_cash(self):
@@ -241,6 +282,55 @@ class Bank:
     def __str__(self):
         return self._string_representation()
 
+
+def banks_commitment(borrower, creditor):
+
+    creditor_ability = creditor.cash
+
+    # Проверяем, может ли потенциальный кредитор выдать кредит на всю сумму текущего долга
+    if creditor_ability >= borrower.loan_amount:
+        loan_flow = Flow('mbk', borrower.loan_amount)
+
+        # В случае успеха добавляем поток как кредит одной стороне и как депозит другой
+        borrower.deposits.append(loan_flow)
+        creditor.credits.append(deepcopy(loan_flow))
+        # self.mbk.append()
+
+        borrower.cash += borrower.loan_amount
+        creditor.cash -= borrower.loan_amount
+
+        # Помечаем банк как разрешённый и возвращаем маркер успеха
+        borrower.solved = True
+        borrower.loan_amount = 0
+
+        return True
+    # Если у кредитора недостаточно денег, чтобы покрыть весь объём, то он отдаёт максимум, который может
+    else:
+
+        loan_flow = Flow('mbk', creditor_ability)
+
+        borrower.deposits.append(loan_flow)
+        creditor.credits.append(deepcopy(loan_flow))
+
+        borrower.cash += creditor_ability
+        creditor.cash -= creditor_ability
+
+        # Уменьшаем текущий долг и возвращаем маркер незакрытого банка
+        borrower.loan_amount -= creditor_ability
+        return False
+
+# Санация центральным банком
+def central_bank_rescue(central_bank, bank):
+    # Центральный банк возмещает под небольшой процент долг банка
+    loan_amount = bank.loan_amount
+    loan_flow = Flow('cb', loan_amount)
+    central_bank.credits.append(loan_flow)
+    bank.deposits.append(deepcopy(loan_flow))
+
+    bank.cash += loan_amount
+    central_bank.cash -= loan_amount
+    bank.loan_amount = 0
+    return True
 
 class Market:
 
