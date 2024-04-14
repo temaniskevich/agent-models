@@ -7,8 +7,10 @@ from agents import Bank, Flow, HistoryList, banks_commitment, central_bank_rescu
 
 banks_list = [Bank(f'Bank_{i}') for i in range(1, 21)]
 cb = Bank('Central_Bank')
-cb.cash = 1e9
-
+cb.cash = 1e8
+cb.cash_history.append(cb.cash)
+system_liquidity_history = []
+system_liquidity_history.append(sum([bank.cash for bank in banks_list]))
 # 2 - создание ликвидности у банков согласно распределению 'real'
 for bank in range(len(banks_list)):
     banks_list[bank].cash = np.array(settings["liquid_distribution"])[bank] * 10e6
@@ -81,9 +83,9 @@ def run(n_steps, day=0):
         solved_banks = []
         unsolved_banks = []
 
+        system_liquidity_history.append(sum([bank.cash for bank in banks_list]))
+        cb.cash_history.append(cb.cash)
 
-
-    # 8 - Валидация системы
 
     # 9 - сохранение истории ликвидности системы и по банкам отдельно в файлы
     # 10 - отрисовка графиков
@@ -91,9 +93,11 @@ def run(n_steps, day=0):
 
 run(n_steps=30)
 
-print(banks_list[19].__dict__)
+print(banks_list[0].__dict__)
 print('---------------------------------------------------------------------------------------------------------------')
 print(f'Кол-во заявок на депозиты: {len(banks_list[1].deposit_apps)}, кол-во депозитов: {len(banks_list[1].deposits)}')
 print(f'Кол-во заявок на кредиты: {len(banks_list[1].credit_apps)}, кол-во кредитов: {len(banks_list[1].credits)}')
-print(banks_list[19].cash_history)
-print(cb.cash)
+print(banks_list[0].cash_history)
+
+print(cb.cash_history)
+print(system_liquidity_history)
