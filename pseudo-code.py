@@ -1,6 +1,6 @@
 from settings import settings
 import numpy as np
-from agents import HistoryList, Flow, Bank
+from agents import HistoryList, Flow, Bank, Model
 
 
 liquid_distr = [0.45, 0.14, 0.08, 0.06, 0.05, 0.03, 0.02, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
@@ -61,16 +61,6 @@ print('-------------------------------------------------------------------------
 pv = Flow('deposit')
 print(pv.__dict__)
 
-deposits_amount_to_return = sum(deposit.volume * (1 + deposit.rate /
-                                                             (360/deposit.payment_period)) **
-                                                             (deposit.maturity / deposit.payment_period)
-                                            for deposit in self.deposits_to_return)
-
-credits_amount_to_get = sum(credit.volume * (1 + credit.rate /
-                                                    (360/credit.payment_period)) **
-                                                    (credit.maturity / credit.payment_period)
-                                            for credit in self.credits_to_get)
-
 fv = pv.volume * (1 + pv.rate / (360/pv.payment_period)) ** (pv.maturity / pv.payment_period)
 print(fv)
 print('---------------------------------------------------------------------------------')
@@ -83,4 +73,9 @@ deposit = Flow('deposit')
 deposit.volume = 100000
 test_bank.deposit_apps.append(deposit)
 test_bank.deposit_apps[0].update_rate(test_bank.delta)
-print(test_bank.deposit_apps)
+#print(test_bank.deposit_apps)
+
+model = Model(settings)
+model.create_world()
+model.run(10)
+print(model.banks[1].__dict__)

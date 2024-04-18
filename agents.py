@@ -265,7 +265,7 @@ class Bank:
         self.credits_to_get = []
 
         self.set_reliability()
-        #self.set_delta()
+        self.set_delta()
 
 
 
@@ -282,55 +282,6 @@ class Bank:
     def __str__(self):
         return self._string_representation()
 
-
-def banks_commitment(borrower, creditor):
-
-    creditor_ability = creditor.cash
-
-    # Проверяем, может ли потенциальный кредитор выдать кредит на всю сумму текущего долга
-    if creditor_ability >= borrower.loan_amount:
-        loan_flow = Flow('mbk', borrower.loan_amount)
-
-        # В случае успеха добавляем поток как кредит одной стороне и как депозит другой
-        borrower.deposits.append(loan_flow)
-        creditor.credits.append(deepcopy(loan_flow))
-        # self.mbk.append()
-
-        borrower.cash += borrower.loan_amount
-        creditor.cash -= borrower.loan_amount
-
-        # Помечаем банк как разрешённый и возвращаем маркер успеха
-        borrower.solved = True
-        borrower.loan_amount = 0
-
-        return True
-    # Если у кредитора недостаточно денег, чтобы покрыть весь объём, то он отдаёт максимум, который может
-    else:
-
-        loan_flow = Flow('mbk', creditor_ability)
-
-        borrower.deposits.append(loan_flow)
-        creditor.credits.append(deepcopy(loan_flow))
-
-        borrower.cash += creditor_ability
-        creditor.cash -= creditor_ability
-
-        # Уменьшаем текущий долг и возвращаем маркер незакрытого банка
-        borrower.loan_amount -= creditor_ability
-        return False
-
-# Санация центральным банком
-def central_bank_rescue(central_bank, bank):
-    # Центральный банк возмещает под небольшой процент долг банка
-    loan_amount = bank.loan_amount
-    loan_flow = Flow('cb', loan_amount)
-    central_bank.credits.append(loan_flow)
-    bank.deposits.append(deepcopy(loan_flow))
-
-    bank.cash += loan_amount
-    central_bank.cash -= loan_amount
-    bank.loan_amount = 0
-    return True
 
 class Market:
 
@@ -533,3 +484,157 @@ class Market:
 
     def __repr__(self):
         return self._string_representation()
+
+class BankModel:
+    def __init__(self, start_settings):
+
+        #self.start_settings = start_settings
+        self.settings = start_settings
+
+        # В модели есть Банки и Центральный Банк
+        self.banks = [Bank(f'Bank_{id}') for id in range(1, 21)]
+        self.cb = Bank('Central_Bank')
+        self.solved_banks = []
+        self.unsolved_banks = []
+
+        # Массивы всей модели для отрисовки графиков
+        self.system_liquidity_history = []
+
+    def create_world(self, cb_cash=1e8):
+        """
+        Создает мир - распределяет ликвидность между банками и назначает стартовый кэш ЦБ
+        :param cb_cash: Объем стартовых резервов Центробанка
+        :return: Создает стартовое состояние мира
+        """
+        self.cb.cash += cb_cash
+        self.cb.cash_history.append(self.cb.cash)
+
+        # Добавляем банкам ликвидность согласно стартовым настройкам
+        for bank in range(len(self.banks)):
+            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 10e6
+            self.banks[bank].cash_history.append(self.banks[bank].cash)
+            self.banks[bank].set_reliability()
+            self.banks[bank].set_delta()
+
+        self.system_liquidity_history.append(sum([bank.cash for bank in self.banks]))
+
+    def run(self, n_steps):
+        """
+        Запускает симуляцию, которая длится n_steps дней
+        :param n_steps: Количество шагов модели
+        :return: Данные модели
+        """
+        self.system_deposits = []
+        self.system_credits = []
+
+        for _ in range(n_steps):
+
+            # 4 - генерация Потоков
+            deposit_supply = []
+            credit_supply = []
+
+            for _ in range(np.random.randint(self.settings["deposit_amount_bound"][0],
+                                             self.settings["deposit_amount_bound"][1])):  # генерируем депозиты
+                deposit = Flow('deposit')
+                deposit_supply.append(deposit)  # создаем массив из сгенерированных депозитов
+
+            self.system_deposits.append(deepcopy(deposit_supply))  # записываем сгенерированные депозиты в историю
+
+            for _ in range(np.random.randint(self.settings["credit_amount_bound"][0], self.settings["credit_amount_bound"][1])):
+                credit = Flow('credit')
+                credit_supply.append(credit)
+
+            self.system_credits.append(deepcopy(credit_supply))  # записываем сгенерированные кредиты в историю
+
+            # 5 - Распределение заявок на депозиты и кредиты по банкам
+            for deposit in deposit_supply:
+                selected_bank = np.random.choice(range(20))
+                self.banks[selected_bank].deposit_apps.append(deposit)  # отправляем ему заявку на депозит
+
+            for credit in credit_supply:
+                selected_bank = np.random.choice(range(20))  # выбираем рандомный банк
+                self.banks[selected_bank].credit_apps.append(credit)  # записываем в потенциальные заявки рандомный кредит
+
+            # 6 - Прием потоков и назначение ставок - включить в процесс валидации
+            for bank in self.banks:
+                bank.validate()
+                self.cb.cash += bank.reserves_to_cb
+                bank.solve()
+                if bank.solved:
+                    self.solved_banks.append(bank)
+                else:
+                    self.unsolved_banks.append(bank)
+
+            # Незакрывшиеся банки отправляем на МБК
+            indeces = list(range(len(self.solved_banks)))
+            for bank in self.unsolved_banks:
+                # Для каждого банка пытаемся найти кредитора среди всех остальных
+                # Один кредитор может выдать больше одного кредита
+
+                np.random.shuffle(indeces)
+                result = False
+                for idx in indeces:
+                    result = banks_commitment(borrower=bank, creditor=self.solved_banks[idx])
+                    if result:
+                        break
+                # Если не закредитовался на МБК, санация ЦБ
+                if not result:
+                    central_bank_rescue(self.cb, bank)
+                    bank.solved = True
+
+            [bank.restart() for bank in self.banks]
+            self.solved_banks = []
+            self.unsolved_banks = []
+
+            self.system_liquidity_history.append(sum([bank.cash for bank in self.banks]))
+            self.cb.cash_history.append(self.cb.cash)
+
+
+def banks_commitment(borrower, creditor):
+
+    creditor_ability = creditor.cash
+
+    # Проверяем, может ли потенциальный кредитор выдать кредит на всю сумму текущего долга
+    if creditor_ability >= borrower.loan_amount:
+        loan_flow = Flow('mbk', borrower.loan_amount)
+
+        # В случае успеха добавляем поток как кредит одной стороне и как депозит другой
+        borrower.deposits.append(loan_flow)
+        creditor.credits.append(deepcopy(loan_flow))
+        # self.mbk.append()
+
+        borrower.cash += borrower.loan_amount
+        creditor.cash -= borrower.loan_amount
+
+        # Помечаем банк как разрешённый и возвращаем маркер успеха
+        borrower.solved = True
+        borrower.loan_amount = 0
+
+        return True
+    # Если у кредитора недостаточно денег, чтобы покрыть весь объём, то он отдаёт максимум, который может
+    else:
+
+        loan_flow = Flow('mbk', creditor_ability)
+
+        borrower.deposits.append(loan_flow)
+        creditor.credits.append(deepcopy(loan_flow))
+
+        borrower.cash += creditor_ability
+        creditor.cash -= creditor_ability
+
+        # Уменьшаем текущий долг и возвращаем маркер незакрытого банка
+        borrower.loan_amount -= creditor_ability
+        return False
+
+# Санация центральным банком
+def central_bank_rescue(central_bank, bank):
+    # Центральный банк возмещает под небольшой процент долг банка
+    loan_amount = bank.loan_amount
+    loan_flow = Flow('cb', loan_amount)
+    central_bank.credits.append(loan_flow)
+    bank.deposits.append(deepcopy(loan_flow))
+
+    bank.cash += loan_amount
+    central_bank.cash -= loan_amount
+    bank.loan_amount = 0
+    return True

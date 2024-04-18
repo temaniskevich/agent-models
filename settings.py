@@ -4,7 +4,6 @@ real = [0.45, 0.14, 0.08, 0.06, 0.05,
         0.01, 0.01, 0.01, 0.01, 0.01]
 
 uniform = [0.05] * 20
-print(uniform)
 
 settings = {"liquid_distribution": real,
             "deposit_amount_bound": (20, 41),
