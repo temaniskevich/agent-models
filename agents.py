@@ -141,28 +141,27 @@ class Bank:
         for deposit in self.deposit_apps:
             deposit.update_rate(self.delta)
             self.deposits.append(deposit)
-            self.reserves_to_cb = settings['cb_reserve_rate'] * deposit.volume
+            self.reserves_to_cb += settings['cb_reserve_rate'] * deposit.volume
             self.deposit_apps.clear()
 
 
         # Принять кредит, если есть кэш на него
+        free_cash = deepcopy(self.cash)
         for credit in self.credit_apps:
             credit.update_rate(self.delta)
-            if self.cash >= credit.volume: # почему-то не работает
+            if free_cash >= credit.volume:  # почему-то не работает
                 self.credits.append(credit)
-                self.cash -= credit.volume
-            elif self.cash < credit.volume:
-                prob = np.random.uniform(0, 0.3)  # генерируем случайную "рисковость" актива
+                free_cash -= credit.volume
+            elif free_cash < credit.volume:
+                prob = np.random.uniform(0, 0.7)  # генерируем случайную "рисковость" актива
                 if prob <= self.risk_tolerance:  # если его рисковость устраивает банк - выдает кредит
                     self.credits.append(credit)
-                    self.cash -= credit.volume
-            self.credit_apps.clear()
+                    free_cash -= credit.volume
 
         # 2. Посчитать текущие обязательства
 
         # Кредиты, которые выдаст по заявкам
-        #credits_to_give = sum(
-            #credit.volume for credit in self.credits)
+        credits_to_give = sum(credit.volume for credit in self.credits)
 
         # Проценты по депозитам, которые нужно выплатить сегодня
         deposit_coupon_to_return = sum(
@@ -192,8 +191,7 @@ class Bank:
         deposits_volume_to_return = sum(deposit.volume for deposit in self.deposits_to_return)
 
         # Сумма всех обязательств банка на сегодня
-        self.current_obligations = deposits_volume_to_return + deposit_coupon_to_return + self.reserves_to_cb
-                                   # + credits_to_give
+        self.current_obligations = (deposits_volume_to_return + deposit_coupon_to_return + self.reserves_to_cb + credits_to_give)
 
 
 
@@ -234,7 +232,7 @@ class Bank:
     def solve(self):
         self.cash += self.current_inflows
         self.cash -= self.current_obligations
-        self.cash_history.append(self.cash)
+
         if self.cash >= 0:
             self.solved = True
         else:
@@ -243,7 +241,7 @@ class Bank:
         #assert self.solved == True
 
         if not self.solved:  # если не может покрыть долги сам - идет на МБК
-            self.loan_amount = - self.cash + np.random.randint(1e6, 10e6)
+            self.loan_amount = - self.cash + np.random.randint(1e5, 1e6)
 
     def restart(self):
         # Обновим историю в кредитах и депозитах
@@ -263,6 +261,8 @@ class Bank:
 
         self.deposits_to_return = []
         self.credits_to_get = []
+
+        self.cash_history.append(self.cash)
 
         self.set_reliability()
         self.set_delta()
@@ -500,7 +500,7 @@ class BankModel:
         # Массивы всей модели для отрисовки графиков
         self.system_liquidity_history = []
 
-    def create_world(self, cb_cash=1e8):
+    def create_world(self, cb_cash=1e12):
         """
         Создает мир - распределяет ликвидность между банками и назначает стартовый кэш ЦБ
         :param cb_cash: Объем стартовых резервов Центробанка
@@ -511,7 +511,7 @@ class BankModel:
 
         # Добавляем банкам ликвидность согласно стартовым настройкам
         for bank in range(len(self.banks)):
-            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 10e6
+            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 1e10
             self.banks[bank].cash_history.append(self.banks[bank].cash)
             self.banks[bank].set_reliability()
             self.banks[bank].set_delta()
