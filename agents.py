@@ -118,6 +118,7 @@ class Bank:
         self.reliability_history = []
 
         self.delta = 0
+        self.costs = 10000
 
     def set_reliability(self):
         self.reliability = self.cash / 2e6
@@ -142,26 +143,29 @@ class Bank:
             deposit.update_rate(self.delta)
             self.deposits.append(deposit)
             self.reserves_to_cb += settings['cb_reserve_rate'] * deposit.volume
-            self.deposit_apps.clear()
 
 
         # Принять кредит, если есть кэш на него
         free_cash = deepcopy(self.cash)
+        # Массив для подвержденных заявок (тк он отличается от массива всех заявок)
+        approved = []
         for credit in self.credit_apps:
             credit.update_rate(self.delta)
             if free_cash >= credit.volume:  # почему-то не работает
                 self.credits.append(credit)
+                approved.append(credit)
                 free_cash -= credit.volume
             elif free_cash < credit.volume:
                 prob = np.random.uniform(0, 0.7)  # генерируем случайную "рисковость" актива
                 if prob <= self.risk_tolerance:  # если его рисковость устраивает банк - выдает кредит
                     self.credits.append(credit)
+                    approved.append(credit)
                     free_cash -= credit.volume
 
         # 2. Посчитать текущие обязательства
 
         # Кредиты, которые выдаст по заявкам
-        credits_to_give = sum(credit.volume for credit in self.credits)
+        credits_to_give = sum(credit.volume for credit in approved)
 
         # Проценты по депозитам, которые нужно выплатить сегодня
         deposit_coupon_to_return = sum(
@@ -191,13 +195,14 @@ class Bank:
         deposits_volume_to_return = sum(deposit.volume for deposit in self.deposits_to_return)
 
         # Сумма всех обязательств банка на сегодня
-        self.current_obligations = (deposits_volume_to_return + deposit_coupon_to_return + self.reserves_to_cb + credits_to_give)
+        self.current_obligations = (deposits_volume_to_return + deposit_coupon_to_return + credits_to_give) \
+                                    #+ self.reserves_to_cb)
 
 
 
         # 3. Посчитать текущие притоки
         # Депозиты, которые поступят на счет банка
-        deposits_to_get = sum(deposit.volume for deposit in self.deposits)
+        deposits_to_get = sum(deposit.volume for deposit in self.deposit_apps)
 
         # Проценты по кредитам, которые должны прийти сегодня
         credit_coupon_to_get = sum(
@@ -229,9 +234,16 @@ class Bank:
 
 
 
+
+
     def solve(self):
+
+        # Пересчет издержек в зависимости от объема операционной деятельности
+
         self.cash += self.current_inflows
+        #self.costs = self.cash * 0.01
         self.cash -= self.current_obligations
+        #self.cash -= self.costs
 
         if self.cash >= 0:
             self.solved = True
@@ -253,9 +265,9 @@ class Bank:
         self.credit_apps = []
 
         #assert self.solved, 'Bank must be solved at the end of day'
-
         self.current_obligations = 0
         self.current_inflows = 0
+        self.reserves_to_cb = 0
 
         #assert self.loan_amount == 0, f'Loan amount must be zero during clearing. Current loan amount is {self.loan_amount}'
 
@@ -511,7 +523,7 @@ class BankModel:
 
         # Добавляем банкам ликвидность согласно стартовым настройкам
         for bank in range(len(self.banks)):
-            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 1e10
+            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 1e9
             self.banks[bank].cash_history.append(self.banks[bank].cash)
             self.banks[bank].set_reliability()
             self.banks[bank].set_delta()
