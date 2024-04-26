@@ -118,7 +118,7 @@ class Bank:
         self.reliability_history = []
 
         self.delta = 0
-        self.costs = 10000
+        self.fixed_costs = 50000
 
     def set_reliability(self):
         self.reliability = self.cash / 2e6
@@ -144,7 +144,6 @@ class Bank:
             self.deposits.append(deposit)
             self.reserves_to_cb += settings['cb_reserve_rate'] * deposit.volume
 
-
         # Принять кредит, если есть кэш на него
         free_cash = deepcopy(self.cash)
         # Массив для подвержденных заявок (тк он отличается от массива всех заявок)
@@ -156,7 +155,7 @@ class Bank:
                 approved.append(credit)
                 free_cash -= credit.volume
             elif free_cash < credit.volume:
-                prob = np.random.uniform(0, 0.7)  # генерируем случайную "рисковость" актива
+                prob = np.random.uniform(0, 0.3)  # генерируем случайную "рисковость" актива
                 if prob <= self.risk_tolerance:  # если его рисковость устраивает банк - выдает кредит
                     self.credits.append(credit)
                     approved.append(credit)
@@ -241,9 +240,9 @@ class Bank:
         # Пересчет издержек в зависимости от объема операционной деятельности
 
         self.cash += self.current_inflows
-        #self.costs = self.cash * 0.01
         self.cash -= self.current_obligations
-        #self.cash -= self.costs
+        operating_costs = self.cash * 0.0001
+        self.cash = self.cash - self.fixed_costs - operating_costs
 
         if self.cash >= 0:
             self.solved = True
@@ -511,6 +510,10 @@ class BankModel:
 
         # Массивы всей модели для отрисовки графиков
         self.system_liquidity_history = []
+        self.system_mbk_credits = []
+        self.hhi_history = []
+        self.banks_dict = {bank.name: bank.cash_history for bank in self.banks}
+
 
     def create_world(self, cb_cash=1e12):
         """
@@ -523,12 +526,15 @@ class BankModel:
 
         # Добавляем банкам ликвидность согласно стартовым настройкам
         for bank in range(len(self.banks)):
-            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 1e9
+            self.banks[bank].cash = np.array(settings["liquid_distribution"])[bank] * 1e10
             self.banks[bank].cash_history.append(self.banks[bank].cash)
             self.banks[bank].set_reliability()
             self.banks[bank].set_delta()
 
         self.system_liquidity_history.append(sum([bank.cash for bank in self.banks]))
+
+    def hhi_index(self, system_liquidity):
+        return sum([(((bank.cash/system_liquidity)*100)**2) for bank in self.banks])
 
     def run(self, n_steps):
         """
@@ -598,8 +604,21 @@ class BankModel:
             self.solved_banks = []
             self.unsolved_banks = []
 
-            self.system_liquidity_history.append(sum([bank.cash for bank in self.banks]))
+            system_liquidity = sum([bank.cash for bank in self.banks])
+            self.system_liquidity_history.append(system_liquidity)
+
+            mbk_count = 0
+            for bank in self.banks:
+                for credit in bank.credits.values:
+                    if credit.flow_type == 'mbk':
+                        mbk_count += 1
+
+            self.system_mbk_credits.append(mbk_count)
             self.cb.cash_history.append(self.cb.cash)
+
+            self.hhi_history.append(self.hhi_index(system_liquidity))
+            self.banks_dict = {bank.name: bank.cash_history for bank in self.banks}
+
 
 
 def banks_commitment(borrower, creditor):
@@ -650,3 +669,5 @@ def central_bank_rescue(central_bank, bank):
     central_bank.cash -= loan_amount
     bank.loan_amount = 0
     return True
+
+

@@ -5,7 +5,7 @@ real = [0.45, 0.14, 0.08, 0.06, 0.05,
 
 uniform = [0.05] * 20
 
-settings = {"liquid_distribution": uniform,
+settings = {"liquid_distribution": real,
             "deposit_amount_bound": (100, 101),
             "credit_amount_bound": (100, 101),
             "deposit_volume_bound": (10000, 1000000),
