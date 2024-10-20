@@ -80,10 +80,10 @@ from agents import HistoryList, Flow, Bank, BankModel
 
 model = BankModel(settings)
 model.create_world()
-model.run(100)
+model.run(200)
 #print(model.banks[1].credits.values[0].flow_type)
-print(model.banks[19].cash_history)
-print([sublist[-1] for sublist in model.banks_dict.values()])
+# print(model.banks[19].cash_history)
+# print([sublist[-1] for sublist in model.banks_dict.values()])
 y = [cash_list[-1] for cash_list in model.banks_dict.values()]
 x = model.banks_dict.keys()
 data = {'Bank': x,
@@ -92,10 +92,15 @@ data = pd.DataFrame(data)
 data_sorted = data.sort_values(by='Cash', ascending=False)
 
 print(x)
+
 print(y)
-plt.figure(figsize=(15,7))
-sns.barplot(data = data_sorted, x = data_sorted['Bank'], y = data_sorted['Cash'], hue = data_sorted['Bank'])
-plt.xticks(fontsize=8)
-plt.show()
+# plt.figure(figsize=(15,7))
+# sns.barplot(data = data_sorted, x = data_sorted['Bank'], y = data_sorted['Cash'], hue = data_sorted['Bank'])
+# plt.xticks(fontsize=8)
+# plt.show()
 
 print(data_sorted)
+
+#print(model.banks[0].deposits)
+print(model.cb.credits.history_values['cb'])
+print(sum([credit.volume for credit in model.banks[0].credits]))

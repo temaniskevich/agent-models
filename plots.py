@@ -4,4 +4,3 @@ from settings import settings
 import matplotlib.pyplot as plt
 
 simulation(steps = 500)
-

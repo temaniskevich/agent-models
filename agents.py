@@ -104,7 +104,7 @@ class Bank:
     def __init__(self, name):
         self.name = name
         self.cash = 0
-        self.risk_tolerance = np.random.uniform(0,1)
+        self.risk_tolerance = np.random.uniform(0,0.1)
         self.reserves_to_cb = 0
 
         self.deposits = HistoryList()
@@ -118,7 +118,8 @@ class Bank:
         self.reliability_history = []
 
         self.delta = 0
-        self.fixed_costs = 50000
+        self.fixed_costs = settings['bank_fixed_costs']
+        self.operating_costs = settings['bank_operating_costs']
 
     def set_reliability(self):
         self.reliability = self.cash / 2e6
@@ -241,8 +242,8 @@ class Bank:
 
         self.cash += self.current_inflows
         self.cash -= self.current_obligations
-        operating_costs = self.cash * 0.0001
-        self.cash = self.cash - self.fixed_costs - operating_costs
+        operating_costs = self.cash * self.operating_costs
+        self.cash -= self.fixed_costs + operating_costs
 
         if self.cash >= 0:
             self.solved = True
@@ -511,8 +512,11 @@ class BankModel:
         # Массивы всей модели для отрисовки графиков
         self.system_liquidity_history = []
         self.system_mbk_credits = []
+        self.cb_credits_history = []
         self.hhi_history = []
         self.banks_dict = {bank.name: bank.cash_history for bank in self.banks}
+        self.system_credits_history = []
+        self.system_deposits_history = []
 
 
     def create_world(self, cb_cash=1e12):
@@ -583,6 +587,9 @@ class BankModel:
                 else:
                     self.unsolved_banks.append(bank)
 
+            self.cb.validate()
+            self.cb.solve()
+
             # Незакрывшиеся банки отправляем на МБК
             indeces = list(range(len(self.solved_banks)))
             for bank in self.unsolved_banks:
@@ -605,16 +612,31 @@ class BankModel:
             self.unsolved_banks = []
 
             system_liquidity = sum([bank.cash for bank in self.banks])
-            self.system_liquidity_history.append(system_liquidity)
+            self.system_liquidity_history.append(system_liquidity + self.cb.cash)
 
             mbk_count = 0
+            cb_count = 0
+            #deposit_count = 0
             for bank in self.banks:
                 for credit in bank.credits.values:
                     if credit.flow_type == 'mbk':
                         mbk_count += 1
 
+            for credit in self.cb.credits.values:
+                if credit.flow_type == 'cb':
+                    cb_count += 1
+
+                #     elif credit.flow_type == 'credit':
+                #         credit_count += 1
+                # for deposit in bank.deposits.values:
+                #     if deposit.flow_type == 'deposit':
+                #         deposit_count += 1
+
             self.system_mbk_credits.append(mbk_count)
+            self.system_credits_history.append(sum([credit.volume for credit in bank.credits for bank in self.banks]))
+            self.system_deposits_history.append(sum([deposit.volume for deposit in bank.deposits for bank in self.banks]))
             self.cb.cash_history.append(self.cb.cash)
+            self.cb_credits_history.append(cb_count)
 
             self.hhi_history.append(self.hhi_index(system_liquidity))
             self.banks_dict = {bank.name: bank.cash_history for bank in self.banks}
