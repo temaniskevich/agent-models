@@ -1,2 +1,5 @@
-# agent-models
-My projects connected with ABMs
+# Russian Banking System Agent-Based Model
+Для запуска модели запусти код в файле runner.py
+
+В файле agents.py находится реализация банков-агентов, их функционала и взаимосвязи
+В settings.py находятся входные настройки модели, которые можно менять для исследования гипотез
