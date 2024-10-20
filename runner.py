@@ -15,6 +15,7 @@ def simulation(steps):
 
 model = BankModel(settings)
 model.create_world(cb_cash=0)
+# Меняет количество дней симуляции
 model.run(50)
 
 y = [cash_list[-1] for cash_list in model.banks_dict.values()]
