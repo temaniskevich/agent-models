@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=7
+# необязательно: байесовская оптимизация в калибровке (method="optuna")
+optuna>=3.0

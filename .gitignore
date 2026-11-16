@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Окружения и секреты
+venv/
+.venv/
+ENV/
+.env
+.env.*
+
+# IDE / ОС
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Локальные рабочие материалы, которые не публикуем
+PLAN.md
+legacy/llm_prototype/
+
+# Результаты запусков (воспроизводятся из конфигов и зёрен)
+outputs/
+runs/
+.streamlit/secrets.toml
