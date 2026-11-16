@@ -73,3 +73,63 @@ def test_every_param_spec_exists_in_config_and_in_range():
         v = to_widget(spec, cfg)                      # AttributeError, если параметра нет в конфиге
         if spec.kind in ("float", "int"):
             assert spec.lo <= v <= spec.hi, (spec.path, v, spec.lo, spec.hi)
+
+
+def test_live_altair_charts_build_and_are_valid_vega_lite():
+    from ui import live_charts as lc
+    m, res = _res()
+    df = res.sector.assign(t=lambda d: range(len(d)))
+    iv = [{"month": 5, "type": "key_rate", "value": 0.01}]
+    charts_ = [lc.rates(df, iv), lc.credit_deposits(df, "growth", iv), lc.credit_deposits(df, "levels"),
+               lc.liquidity(df, iv), lc.risk(df, 8.0, iv), lc.exit_panic(df, iv), lc.profit(df, iv),
+               lc.structure(m.network_snapshot(), m.car_now, 8.0), lc.network(m.network_snapshot())]
+    for ch in charts_:
+        spec = lc.finish(ch).to_dict()                # валидация по схеме Vega-Lite
+        assert "$schema" in spec
+        assert "selection" not in str(spec).lower() or "params" not in spec   # без выделений: иначе у элемента появится id
+
+
+def test_live_network_handles_empty_network():
+    from ui import live_charts as lc
+    snap = {"lender": np.array([], int), "borrower": np.array([], int), "amount": np.array([]),
+            "assets": np.array([5.0, 3.0, 0.0]), "active": np.array([True, True, False]),
+            "reliability": np.array([0.8, 0.5, 0.0]), "bank_id": np.arange(3), "cb_debt": np.zeros(3)}
+    lc.finish(lc.network(snap)).to_dict()
+
+
+def test_live_chart_spec_is_stable_between_updates_only_data_changes():
+    """Защита от мигания: если спецификация меняется между тиками, Vega перерисовывает график целиком."""
+    import copy
+    from ui import live_charts as lc
+    cfg = preset("rate_shock_panic").replace(n_months=60, record_network=True)
+    m = BankingModel(cfg, seed=2)
+    frames = {}
+    snaps = {}
+    for rec in m.iter_months():
+        pass
+    full = m.result().sector.assign(t=lambda d: range(len(d)))
+    snap = m.network_snapshot()
+    builders = {
+        "rates": lambda d: lc.rates(d), "growth": lambda d: lc.credit_deposits(d, "growth"),
+        "liq": lambda d: lc.liquidity(d), "risk": lambda d: lc.risk(d, 8.0), "exit": lambda d: lc.exit_panic(d),
+        "profit": lambda d: lc.profit(d)}
+    for name, f in builders.items():
+        a = lc.finish(f(full.iloc[:30])).to_dict()
+        b = lc.finish(f(full.iloc[:31])).to_dict()
+        a.pop("datasets"); b.pop("datasets")
+        assert a == b, f"спецификация графика {name} зависит от данных → будет мигать"
+    a = lc.finish(lc.network(snap)).to_dict(); b = lc.finish(lc.network(snap)).to_dict()
+    assert a == b
+
+
+def test_to_spec_keeps_constant_dataset_names_and_data():
+    from ui import live_charts as lc
+    m, res = _res()
+    df = res.sector.assign(t=lambda d: range(len(d)))
+    a = lc.to_spec(lc.rates(df.iloc[:20]))
+    b = lc.to_spec(lc.rates(df.iloc[:21]))
+    assert set(a["datasets"]) == set(b["datasets"]) == {"rates"}
+    assert len(b["datasets"]["rates"]) > len(a["datasets"]["rates"]) > 0
+    assert a["datasets"]["rates"][0].keys() >= {"t", "series", "value"}
+    # в слоях ссылки на именованные наборы, а не встроенные данные
+    assert all(layer["data"] == {"name": "rates"} for layer in a["layer"] if "data" in layer)

@@ -28,14 +28,15 @@ from abm_banks.metrics import LABELS, build_sector_frame
 from abm_banks.synthetic import ARJumpControl
 from abm_banks.validation import (checks_table, mbk_network_stats, mbk_topology_series,
                                   size_distribution_stability, stylized_facts)
-from ui import charts
+from ui import charts, live_charts
 from ui.params import (GROUPS, KIND_LABELS, P, all_specs, apply_widgets, fill_widgets,
                        widget_key)
 
 st.set_page_config(page_title="АМ банковского сектора РФ", page_icon="🏦", layout="wide")
 
-SPEEDS = {"Медленно (≈ 4 мес./с)": (0.25, 1), "Нормально (≈ 12 мес./с)": (0.05, 2),
-          "Быстро": (0.0, 6), "Мгновенно (только итог)": (0.0, 10 ** 6)}
+# скорость: (период обновления графиков, сек.; месяцев модели за одно обновление)
+SPEEDS = {"Медленно (≈ 2 мес./с)": (0.5, 1), "Нормально (≈ 8 мес./с)": (0.5, 4),
+          "Быстро (≈ 24 мес./с)": (0.5, 12), "Мгновенно (только итог)": (0.5, 10 ** 6)}
 
 
 # ======================================================================
@@ -49,7 +50,7 @@ def init_state() -> None:
     fill_widgets(base, ss)
     ss.update(initialized=True, preset_name="rate_shock_panic", model=None, records=[], running=False,
               finished=False, run_cfg=None, step_once=False, ensemble=None, ensemble_cfg=None,
-              calib=None, synth=None, speed="Нормально (≈ 12 мес./с)", layout_mode="growth")
+              calib=None, synth=None, speed="Нормально (≈ 8 мес./с)", layout_mode="growth")
 
 
 def current_config() -> ModelConfig:
@@ -200,37 +201,47 @@ def snapshot_arrays(model: BankingModel) -> tuple[dict, np.ndarray]:
     return snap, model.car_now
 
 
-def render_kpis(ph, df: pd.DataFrame, model: BankingModel) -> None:
-    with ph.container():
-        c = st.columns(8)
-        last = df.iloc[-1]
-        prev = df.iloc[-2] if len(df) > 1 else last
-        c[0].metric("Месяц", f"{int(last['t']) + 1} / {model.cfg.n_months}")
-        c[1].metric("Ключевая, %", f"{last['key_rate']:.2f}", f"{last['key_rate'] - prev['key_rate']:+.2f}")
-        c[2].metric("Кредитная, %", f"{last['loan_rate']:.2f}", f"{last['loan_rate'] - prev['loan_rate']:+.2f}")
-        c[3].metric("По вкладам, %", f"{last['deposit_rate']:.2f}", f"{last['deposit_rate'] - prev['deposit_rate']:+.2f}")
-        g = last["loans_growth_yoy"]
-        c[4].metric("Кредиты г/г, %", "—" if pd.isna(g) else f"{g:.1f}")
-        g = last["deposits_growth_yoy"]
-        c[5].metric("Вклады г/г, %", "—" if pd.isna(g) else f"{g:.1f}")
-        c[6].metric("CAR сектора, %", f"{last['car']:.1f}", f"{last['car'] - prev['car']:+.2f}")
-        c[7].metric("Банков", f"{int(last['n_banks'])}", f"−{int(df['failures'].sum())} всего" if df["failures"].sum() else None,
-                    delta_color="inverse")
+def render_kpis(df: pd.DataFrame, model: BankingModel) -> None:
+    c = st.columns(8)
+    last = df.iloc[-1]
+    prev = df.iloc[-2] if len(df) > 1 else last
+    c[0].metric("Месяц", f"{int(last['t']) + 1} / {model.cfg.n_months}")
+    c[1].metric("Ключевая, %", f"{last['key_rate']:.2f}", f"{last['key_rate'] - prev['key_rate']:+.2f}")
+    c[2].metric("Кредитная, %", f"{last['loan_rate']:.2f}", f"{last['loan_rate'] - prev['loan_rate']:+.2f}")
+    c[3].metric("По вкладам, %", f"{last['deposit_rate']:.2f}", f"{last['deposit_rate'] - prev['deposit_rate']:+.2f}")
+    g = last["loans_growth_yoy"]
+    c[4].metric("Кредиты г/г, %", "—" if pd.isna(g) else f"{g:.1f}")
+    g = last["deposits_growth_yoy"]
+    c[5].metric("Вклады г/г, %", "—" if pd.isna(g) else f"{g:.1f}")
+    c[6].metric("CAR сектора, %", f"{last['car']:.1f}", f"{last['car'] - prev['car']:+.2f}")
+    c[7].metric("Банков", f"{int(last['n_banks'])}", f"−{int(df['failures'].sum())} всего" if df["failures"].sum() else None,
+                delta_color="inverse")
 
 
-def render_live(ph: dict, model: BankingModel, records: list[dict], cfg: ModelConfig, mode: str, tick: int) -> None:
+def render_live(model: BankingModel, records: list[dict], cfg: ModelConfig, mode: str) -> None:
+    """Рисует дашборд на Vega-Lite с постоянными именами наборов данных: у таких графиков нет
+    идентификатора по содержимому, и при обновлении браузер меняет только данные, не перерисовывая
+    график. (Plotly в Streamlit 1.45 пересоздаёт график при каждом обновлении — экран мигает.)"""
     df = frame_from_records(records, cfg)
     iv = model.interventions
-    render_kpis(ph["kpi"], df, model)
-    ph["rates"].plotly_chart(charts.fig_rates(df, iv), use_container_width=True, key=f"rates{tick}")
-    ph["credit"].plotly_chart(charts.fig_credit_deposits(df, mode, iv), use_container_width=True, key=f"credit{tick}")
-    ph["liq"].plotly_chart(charts.fig_liquidity(df, iv), use_container_width=True, key=f"liq{tick}")
-    ph["risk"].plotly_chart(charts.fig_risk(df, cfg.banks.car_min * 100, iv), use_container_width=True, key=f"risk{tick}")
-    ph["exit"].plotly_chart(charts.fig_exit(df, iv), use_container_width=True, key=f"exit{tick}")
-    ph["profit"].plotly_chart(charts.fig_profit(df, iv), use_container_width=True, key=f"profit{tick}")
+    render_kpis(df, model)
+    lc = live_charts
+
+    def chart(ch, col, fixed_width: int | None = None) -> None:
+        if fixed_width:
+            ch = ch.properties(width=fixed_width)
+        col.vega_lite_chart(spec=lc.to_spec(ch), use_container_width=fixed_width is None, theme=None)
+
+    r1, r2, r3, r4 = st.columns(2), st.columns(2), st.columns(2), st.columns(2)
+    chart(lc.rates(df, iv), r1[0])
+    chart(lc.credit_deposits(df, mode, iv), r1[1])
+    chart(lc.liquidity(df, iv), r2[0])
+    chart(lc.risk(df, cfg.banks.car_min * 100, iv), r2[1])
+    chart(lc.exit_panic(df, iv, cfg.sector.n_banks), r3[0])
+    chart(lc.profit(df, iv), r3[1])
     snap, car = snapshot_arrays(model)
-    ph["struct"].plotly_chart(charts.fig_structure(snap, car, cfg.banks.car_min * 100), use_container_width=True, key=f"struct{tick}")
-    ph["net"].plotly_chart(charts.fig_network(snap), use_container_width=True, key=f"net{tick}")
+    chart(lc.structure(snap, car, cfg.banks.car_min * 100), r4[0])
+    chart(lc.network(snap), r4[1], fixed_width=420)
 
 
 # ======================================================================
@@ -263,77 +274,61 @@ def tab_live(cfg: ModelConfig) -> None:
         b[7].radio("График кредитов", ["growth", "levels"], key="layout_mode", horizontal=True,
                    format_func=lambda x: "темпы" if x == "growth" else "объёмы", label_visibility="collapsed")
 
-    progress = st.empty()
-    kpi = st.empty()
-    r1 = st.columns(2)
-    r2 = st.columns(2)
-    r3 = st.columns(2)
-    r4 = st.columns(2)
-    ph = {"kpi": kpi, "rates": r1[0].empty(), "credit": r1[1].empty(), "liq": r2[0].empty(), "risk": r2[1].empty(),
-          "exit": r3[0].empty(), "profit": r3[1].empty(), "struct": r4[0].empty(), "net": r4[1].empty()}
-
     if model is None:
         st.info("Выберите пресет и параметры слева и нажмите «▶️ Запустить». Графики будут строиться по ходу расчёта; "
                 "шоки можно подавать кнопками выше прямо во время симуляции.")
         return
 
-    delay, every = SPEEDS[ss.speed]
-    tick = int(time.time() * 1000) % 10 ** 9
+    # Живая часть — фрагмент с таймером. Каждый тик продвигает модель на несколько месяцев и обновляет
+    # графики на месте. Пока идёт расчёт, остальной экран не перерисовывается (нет мигания).
+    interval, per_tick = SPEEDS[ss.speed]
+    panel = st.fragment(run_every=interval if ss.running else None)(live_panel)
+    panel(per_tick)
+
+
+def live_panel(per_tick: int) -> None:
+    ss = st.session_state
+    model: BankingModel = ss.model
     run_cfg = model.cfg
-
-    def paint(final: bool = False) -> None:
-        nonlocal tick
-        tick += 1
-        if ss.records:
-            render_live(ph, model, ss.records, run_cfg, ss.layout_mode, tick)
-        total = model.total_steps
-        if model.t < run_cfg.burn_in:
-            progress.progress(model.t / total, text=f"Прогрев модели: {model.t}/{run_cfg.burn_in}")
-        else:
-            progress.progress(min(model.t / total, 1.0), text=f"Месяц {max(model.t - run_cfg.burn_in, 0)} из {run_cfg.n_months}")
-
-    if ss.step_once and model.t < model.total_steps:
-        ss.step_once = False
-        try:
-            while model.t < model.total_steps:
-                rec = model.step()
-                if rec is not None:
-                    ss.records.append(rec)
-                    break
-        except SectorCollapse as exc:
-            ss.finished = True
-            st.error(f"Банковская система разрушена: {exc}.")
-        if model.t >= model.total_steps:
-            ss.finished = True
-        paint()
-        return
-
-    if not ss.running:
-        paint()
-        if ss.finished:
-            st.success("Симуляция завершена. Подробности — на вкладках «Банки», «Интерпретация», «Ансамбль».")
-        return
-
-    # ---- живой цикл ----
     collapsed = None
+
     try:
-        while ss.running and model.t < model.total_steps:
-            rec = model.step()
-            if rec is not None:
-                ss.records.append(rec)
-                if model.t % every == 0:
-                    paint()
-                    if delay:
-                        time.sleep(delay)
+        if ss.step_once and model.t < model.total_steps:
+            ss.step_once = False
+            _advance(model, 1)
+        elif ss.running:
+            _advance(model, per_tick)
     except SectorCollapse as exc:
         collapsed = str(exc)
-    paint(final=True)
+
+    done = model.t >= model.total_steps
+    total = model.total_steps
+    if model.t < run_cfg.burn_in:
+        st.progress(model.t / total, text=f"Прогрев модели: {model.t}/{run_cfg.burn_in}")
+    else:
+        st.progress(min(model.t / total, 1.0), text=f"Месяц {max(model.t - run_cfg.burn_in, 0)} из {run_cfg.n_months}")
+    if ss.records:
+        render_live(model, ss.records, run_cfg, ss.layout_mode)
+
     if collapsed:
         ss.running, ss.finished = False, True
         st.error(f"Банковская система разрушена: {collapsed}. Результат до этого момента сохранён на вкладках.")
-    elif model.t >= model.total_steps:
+    elif done and not ss.finished:
         ss.running, ss.finished = False, True
-        st.rerun()
+        st.rerun(scope="app")                       # остановить таймер и обновить остальные вкладки
+    elif ss.finished:
+        st.success("Симуляция завершена. Подробности — на вкладках «Банки», «Интерпретация», «Ансамбль».")
+
+
+def _advance(model: BankingModel, months: int) -> None:
+    """Продвигает модель на ``months`` записанных месяцев (прогрев не считается)."""
+    ss = st.session_state
+    got = 0
+    while model.t < model.total_steps and got < months:
+        rec = model.step()
+        if rec is not None:
+            ss.records.append(rec)
+            got += 1
 
 
 # ======================================================================
@@ -654,7 +649,21 @@ def tab_about(cfg: ModelConfig) -> None:
 
 
 # ======================================================================
+# Streamlit затемняет «устаревшие» элементы (data-stale) на время перерисовки — при обновлении фрагмента
+# каждые полсекунды это выглядит как мигание. Отключаем затемнение для графиков, метрик и прогресса.
+NO_STALE_DIM = """
+<style>
+[data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stVegaLiteChart"]),
+[data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stMetric"]),
+[data-testid="stElementContainer"][data-stale="true"]:has([data-testid="stProgress"]) {
+    opacity: 1 !important; transition: none !important;
+}
+</style>
+"""
+
+
 def main() -> None:
+    st.markdown(NO_STALE_DIM, unsafe_allow_html=True)
     init_state()
     cfg = sidebar()
     st.title("🏦 Агентная модель банковского сектора России")

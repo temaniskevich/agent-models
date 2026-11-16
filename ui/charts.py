@@ -17,7 +17,8 @@ COL = {
 }
 LAYOUT = dict(template="plotly_white", margin=dict(l=50, r=20, t=85, b=40), height=350,
               legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, font=dict(size=11)),
-              hovermode="x unified", font=dict(size=12))
+              hovermode="x unified", font=dict(size=12),
+              uirevision="live")          # сохраняет масштаб/выделение пользователя при обновлении данных
 
 
 def _x(df: pd.DataFrame) -> np.ndarray:
