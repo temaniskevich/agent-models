@@ -191,3 +191,45 @@ def test_partial_pass_through_scales_rate_response():
     d_full = full["loan_rate_corp"].iloc[m + 8] - full["loan_rate_corp"].iloc[m - 2]
     d_half = half["loan_rate_corp"].iloc[m + 8] - half["loan_rate_corp"].iloc[m - 2]
     assert 0.3 * d_full < d_half < 0.75 * d_full
+
+
+# --- структура предложения кредита (шаг 3б): уход спроса с рынка и надбавки к весам риска ----------
+def _lending_run(extra=None, mult=None, n=60, seed=3):
+    cfg = ModelConfig().replace(n_months=n, record_banks=False, check_identities=True, **(extra or {}))
+    scn = Scenario("b", key_rate=np.full(n, 0.08), rw_retail_mult=mult)
+    return BankingModel(cfg, scenario=scn, seed=seed).run().sector
+
+
+def test_backlog_exit_off_by_default_and_reproduces_old_behaviour():
+    cfg = ModelConfig().replace(n_months=36)
+    assert cfg.demand.backlog_exit == 0.0
+    a = run(cfg, 4).sector
+    b = run(cfg.replace(**{"demand.backlog_exit": 0.0}), 4).sector
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_backlog_exit_reduces_accumulated_unmet_demand():
+    tight = {"demand.loan_trend_growth.1": 0.28, "demand.loan_trend_growth.0": 0.13}
+    base = _lending_run(tight)
+    exit_ = _lending_run({**tight, "demand.backlog_exit": 0.3})
+    rel = lambda s: s["credit_demand_unmet"].iloc[-1] / s["loans_total"].iloc[-1]       # noqa: E731
+    assert rel(base) > 0.03                      # без ухода спрос копится
+    assert rel(exit_) < 0.5 * rel(base)
+
+
+def test_rw_retail_mult_slows_retail_lending_and_keeps_identities():
+    n = 60
+    mult = np.ones(n)
+    mult[30:] = 1.5
+    free, loaded = _lending_run(n=n), _lending_run(mult=mult, n=n)
+    g = lambda s: s["loans_retail"].iloc[-1] / s["loans_retail"].iloc[29]               # noqa: E731
+    assert g(loaded) < g(free)
+
+
+def test_rw_retail_mult_validated_and_padded():
+    with pytest.raises(ValueError):
+        Scenario("x", key_rate=np.full(5, 0.08), rw_retail_mult=np.ones(4))
+    with pytest.raises(ValueError):
+        Scenario("x", key_rate=np.full(5, 0.08), rw_retail_mult=np.zeros(5))
+    s = Scenario("x", key_rate=np.full(5, 0.08), rw_retail_mult=np.full(5, 1.3)).padded(3)
+    assert len(s.rw_retail_mult) == 8 and np.allclose(s.rw_retail_mult[:3], 1.0)

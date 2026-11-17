@@ -7,7 +7,9 @@
 * ``credit_stress``— добавка к вероятности дефолтов (множитель = 1 + значение);
 * ``confidence``   — паника вкладчиков, 0..1 (разовый импульс);
 * ``deposit_shock``— лог-шок желаемого запаса вкладов (уровень);
-* ``demand_shock`` — лог-шок желаемого запаса кредитов (уровень).
+* ``demand_shock`` — лог-шок желаемого запаса кредитов (уровень);
+* ``rw_retail_mult`` — множитель к весу риска розничных кредитов (макропруденциальные надбавки ЦБ:
+  1.0 — без надбавки, 1.5 — вес 1.2 → 1.8); по умолчанию 1.0.
 
 Реальные макрошоки по умолчанию выключены: по плану исследования кризис задаёт
 только путь ставки, а остальное должна породить сама модель.
@@ -34,6 +36,7 @@ class Scenario:
     confidence: np.ndarray = field(default=None)       # type: ignore[assignment]
     deposit_shock: np.ndarray = field(default=None)    # type: ignore[assignment]
     demand_shock: np.ndarray = field(default=None)     # type: ignore[assignment]
+    rw_retail_mult: np.ndarray = field(default=None)   # type: ignore[assignment]
     meta: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -44,6 +47,12 @@ class Scenario:
             setattr(self, attr, np.zeros(n) if val is None else np.asarray(val, dtype=float))
             if len(getattr(self, attr)) != n:
                 raise ValueError(f"{attr}: длина должна совпадать с key_rate ({n})")
+        self.rw_retail_mult = (np.ones(n) if self.rw_retail_mult is None
+                               else np.asarray(self.rw_retail_mult, dtype=float))
+        if len(self.rw_retail_mult) != n:
+            raise ValueError(f"rw_retail_mult: длина должна совпадать с key_rate ({n})")
+        if np.any(self.rw_retail_mult <= 0):
+            raise ValueError("rw_retail_mult должен быть положительным")
         if np.any(self.key_rate <= 0):
             raise ValueError("ключевая ставка должна быть положительной")
 
@@ -62,6 +71,7 @@ class Scenario:
             confidence=pad(self.confidence, 0.0),
             deposit_shock=pad(self.deposit_shock, 0.0),
             demand_shock=pad(self.demand_shock, 0.0),
+            rw_retail_mult=pad(self.rw_retail_mult, 1.0),
             meta=dict(self.meta, burn_in=burn_in),
         )
 
