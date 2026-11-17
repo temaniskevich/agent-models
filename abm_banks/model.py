@@ -252,6 +252,7 @@ class BankingModel:
         self.pd_ema = np.array([self.cfg.credit.pd_monthly]) * self.quality[:, None]
 
         k0 = self._scn.key_rate[0]
+        self.k_anchor = k0                   # нейтральный уровень, от которого считается неполный перенос
         self.prev_k = k0
         self.last_refi = k0 + cfg.cb.refi_spread
         self.last_cbd = max(k0 - cfg.cb.deposit_spread, 0.0)
@@ -342,11 +343,13 @@ class BankingModel:
         car_tgt = self.car_target + adj.car_target
         scarcity = np.maximum(car_tgt + 0.01 - car, 0.0)
         for s in (C, R):
+            k_l = self.k_anchor + b.pass_through_loan[s] * (k - self.k_anchor)
+            k_d = self.k_anchor + b.pass_through_deposit[s] * (k - self.k_anchor)
             prem = np.minimum(b.risk_pricing * 12.0 * self.pd_ema[:, s] * cr.lgd[s], b.risk_premium_cap)
-            tgt_l = (k + b.loan_spread[s] + prem + b.market_power_loan * (trust - 0.5)
+            tgt_l = (k_l + b.loan_spread[s] + prem + b.market_power_loan * (trust - 0.5)
                      + b.liq_pressure_loan * np.maximum(self.pressure, 0.0)
                      + b.capital_scarcity_loan * scarcity + adj.loan_spread)
-            tgt_d = (k - b.deposit_spread[s] - b.market_power_deposit * (trust - 0.5)
+            tgt_d = (k_d - b.deposit_spread[s] - b.market_power_deposit * (trust - 0.5)
                      + b.liq_pressure_deposit * self.pressure
                      + b.stress_deposit_premium * self.stress + adj.deposit_spread)
             tgt_l = np.clip(tgt_l, k * 0.5, b.loan_rate_cap)

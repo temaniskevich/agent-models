@@ -1,114 +1,114 @@
 {
   "window": "A",
   "theta": {
-    "demand.loan_trend_growth.0": 0.12994497871153698,
-    "demand.loan_trend_growth.1": 0.24091422437754423,
-    "demand.deposit_trend_growth.0": 0.1759506280452357,
-    "demand.deposit_trend_growth.1": 0.22065150432490427
+    "demand.loan_trend_growth.0": 0.13704918388541537,
+    "demand.loan_trend_growth.1": 0.24654374334200482,
+    "demand.deposit_trend_growth.0": 0.18204352232966486,
+    "demand.deposit_trend_growth.1": 0.23745987843428243
   },
-  "objective": 1.169583598476226,
+  "objective": 1.7027641803393962,
   "n_evals": 201,
-  "notes": "метод lhs_nm, бюджет 200, зёрен 6, окно ('2010-06', '2013-12') | ПРЕДВАРИТЕЛЬНО: малый бюджет, не для публикации без перепроверки",
+  "notes": "метод lhs_nm, бюджет 200, зёрен 6, окно ('2010-06', '2013-12') | ПРЕДВАРИТЕЛЬНО; рублёвые ряды объёмов (17.11.2026)",
   "moments": [
     {
       "moment": "loans_corp.growth_mean",
-      "data": 15.310299083919379,
-      "model": 11.511827454838873,
-      "weight": 0.03606597164883358,
+      "data": 17.49668565612263,
+      "model": 12.075001331045817,
+      "weight": 0.028791904716636004,
       "in_objective": true,
-      "z": -0.7213693826821227
+      "z": -0.9199610189616871
     },
     {
       "moment": "loans_corp.growth_std",
-      "data": 12.620954413267123,
-      "model": 9.03767693999221,
+      "data": 11.088735281622299,
+      "model": 9.348442407021563,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "loans_corp.growth_ac1",
-      "data": 0.2019823481901045,
-      "model": 0.468309239273388,
+      "data": 0.23144928143894863,
+      "model": 0.5491748227120706,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "loans_retail.growth_mean",
-      "data": 27.867422083965614,
-      "model": 21.30163232304353,
-      "weight": 0.011172907113071406,
+      "data": 30.12838651500403,
+      "model": 21.754720674472196,
+      "weight": 0.009640197108228847,
       "in_objective": true,
-      "z": -0.6940169325599868
+      "z": -0.8221642392609888
     },
     {
       "moment": "loans_retail.growth_std",
-      "data": 12.433067537486655,
-      "model": 12.093894476555263,
+      "data": 11.944732518654934,
+      "model": 12.45543944463248,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "loans_retail.growth_ac1",
-      "data": 0.4333358299849866,
-      "model": 0.7156195417237042,
+      "data": 0.4164065217637868,
+      "model": 0.7168273426208632,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "deposits_corp.growth_mean",
-      "data": 15.027041799589927,
-      "model": 16.430458018473722,
-      "weight": 0.056171306512581134,
+      "data": 15.589404450485286,
+      "model": 16.98158776537093,
+      "weight": 0.05289074110187906,
       "in_objective": true,
-      "z": 0.33261647291329743
+      "z": 0.3201741392768414
     },
     {
       "moment": "deposits_corp.growth_std",
-      "data": 41.234696197064885,
-      "model": 3.3081546290899992,
+      "data": 54.83118351067352,
+      "model": 3.351205821221411,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "deposits_corp.growth_ac1",
-      "data": -0.18459324437270794,
-      "model": 0.19807756078158287,
+      "data": -0.12273661917397664,
+      "model": 0.21798166046399015,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "deposits_retail.growth_mean",
-      "data": 19.279539542171523,
-      "model": 20.57052123388303,
-      "weight": 0.034150629801947094,
+      "data": 20.607099284157876,
+      "model": 22.168502779476523,
+      "weight": 0.03198154216157343,
       "in_objective": true,
-      "z": 0.23857198383671077
+      "z": 0.27923178212571687
     },
     {
       "moment": "deposits_retail.growth_std",
-      "data": 20.513359220030353,
-      "model": 3.7391265580739925,
+      "data": 24.506214068110133,
+      "model": 3.8644742051096954,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "deposits_retail.growth_ac1",
-      "data": -0.35960909207220376,
-      "model": 0.257868529183532,
+      "data": -0.30277003014235665,
+      "model": 0.29682727113514706,
       "weight": NaN,
       "in_objective": false,
       "z": NaN
     },
     {
       "moment": "cb_debt_to_deposits",
-      "data": 8.3889566888915,
+      "data": 10.674825730245216,
       "model": 0.0,
       "weight": NaN,
       "in_objective": false,

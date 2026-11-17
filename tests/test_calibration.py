@@ -17,8 +17,9 @@ def test_data_loaded_and_sane(data):
     w = slice_window(data, "2017-01", "2021-12")
     assert w["key_rate"].between(4, 10.5).all()
     assert (w["loans_corp"] > 20_000).all() and w["loan_rate_corp"].notna().all()
-    # объёмы в млрд руб.: кредиты организациям в 2021 г. — десятки трлн руб.
-    assert 40_000 < data.loc["2021-12", "loans_corp"] < 80_000
+    # объёмы в млрд руб., только рубли: кредиты организациям в 2021 г. — десятки трлн руб.
+    assert 25_000 < data.loc["2021-12", "loans_corp"] < 80_000
+    assert (data["loans_corp_all"] >= data["loans_corp"]).all()               # суммарный ряд (с валютой) не меньше рублёвого
 
 
 def test_moments_defined_for_data_and_model(data):
@@ -59,3 +60,12 @@ def test_default_params_per_window():
     assert len(default_params("B")) == len(DEFAULT_PARAMS)
     a = default_params("A")
     assert len(a) == 4 and all("_trend_growth" in p.name for p in a)
+
+
+def test_window_c_uses_response_moments():
+    from abm_banks.calibration import IRF_PARAMS, default_params
+    cal = SMMCalibrator(ModelConfig(), load_cbr_monthly(), "C", n_seeds=2)
+    assert any(k.startswith("lp.") for k in cal.keys) and len(default_params("C")) == len(IRF_PARAMS)
+    assert all(cal.weights[k] > 0 for k in cal.keys)
+    mid = np.array([(p.low + p.high) / 2 for p in cal.params])
+    assert np.isfinite(cal.objective(mid))

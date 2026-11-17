@@ -181,3 +181,13 @@ def test_random_parameter_fuzz_keeps_identities():
             set_param(cfg, k, float(rng.uniform(lo, hi)))
         res = BankingModel(cfg, seed=int(rng.integers(1e6))).run()
         assert np.isfinite(res.sector["loans_total"]).all()
+
+
+def test_partial_pass_through_scales_rate_response():
+    base = preset("rate_shock").replace(n_months=48)
+    full = run(base, 3).sector
+    half = run(base.replace(**{"banks.pass_through_loan.0": 0.5, "banks.pass_through_loan.1": 0.5}), 3).sector
+    m = base.scenario.shock_month
+    d_full = full["loan_rate_corp"].iloc[m + 8] - full["loan_rate_corp"].iloc[m - 2]
+    d_half = half["loan_rate_corp"].iloc[m + 8] - half["loan_rate_corp"].iloc[m - 2]
+    assert 0.3 * d_full < d_half < 0.75 * d_full

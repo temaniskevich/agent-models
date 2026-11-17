@@ -114,6 +114,9 @@ def parse_survey_odc(path: Path) -> pd.DataFrame:
     df = pd.DataFrame({
         "loans_corp": series([56, 60]), "loans_retail": series([65, 69]),
         "deposits_corp": series([76, 80, 85, 89]), "deposits_retail": series([77, 81, 86, 90]),
+        # только рубли: без валютной переоценки (в модели валюты нет)
+        "loans_corp_rub": series([56]), "loans_retail_rub": series([65]),
+        "deposits_corp_rub": series([76, 80]), "deposits_retail_rub": series([77, 81]),
         "cb_debt_stock": series([71]),
     }, index=pd.PeriodIndex(idx, freq="M", name="date"))
     return df
@@ -253,7 +256,8 @@ def main(out_dir: Path = OUT_DIR) -> None:
     out = df.copy()
     out.insert(0, "date", out.index.to_timestamp().strftime("%Y-%m-%d"))
     cols = ["date", "key_rate", "key_rate_source", "loans_corp", "loans_retail", "deposits_corp",
-            "deposits_retail", "cb_debt_stock", "loan_rate_corp", "loan_rate_retail",
+            "deposits_retail", "loans_corp_rub", "loans_retail_rub", "deposits_corp_rub", "deposits_retail_rub",
+            "cb_debt_stock", "loan_rate_corp", "loan_rate_retail",
             "deposit_rate_corp", "deposit_rate_retail", "liquidity_balance",
             "cb_claims_on_banks", "cb_obligations_to_banks"]
     out[cols].round(4).to_csv(out_dir / "cbr_monthly.csv", index=False)

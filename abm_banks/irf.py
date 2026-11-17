@@ -25,14 +25,14 @@ def _base(df: pd.DataFrame, col: str) -> pd.Series:
     return 100.0 * np.log(df[col]) if col in VOLUMES else df[col].astype(float)
 
 
-def local_projection(df: pd.DataFrame, col: str, H: int = 12, nlags: int = 3) -> pd.DataFrame:
+def local_projection(df: pd.DataFrame, col: str, H: int = 12, nlags: int = 3, hs: tuple[int, ...] | None = None) -> pd.DataFrame:
     """β_h при Δk(t) для h = 0…H, ошибки Ньюи–Уэста. ``df`` — колонки ``key_rate`` (в %) и ``col``."""
     k = df["key_rate"].astype(float)
     y = _base(df, col)
     dk, dy = k.diff(), y.diff()
     ctrl = {f"dk{j}": dk.shift(j) for j in range(1, nlags + 1)} | {f"dy{j}": dy.shift(j) for j in range(1, nlags + 1)}
     rows = []
-    for h in range(H + 1):
+    for h in (range(H + 1) if hs is None else hs):
         d = pd.DataFrame({"y": y.shift(-h) - y.shift(1), "dk": dk, **ctrl}).dropna()
         X = np.column_stack([np.ones(len(d)), d.drop(columns="y").to_numpy()])
         Y = d["y"].to_numpy()
@@ -127,3 +127,29 @@ def evaluate(data: dict[str, pd.DataFrame], model: dict[str, pd.DataFrame]) -> V
                      "data_h12": d.loc[12, "beta"], "data_h12_se": d.loc[12, "se"], "model_h12": m.loc[12, "beta"]})
     t = pd.DataFrame(rows)
     return Verdict(t, int(t["passed"].sum()))
+
+
+def evaluate_out_of_sample(theta: dict[str, float], sample: tuple[str, str] = ("2020-01", "2026-09"), n_seeds: int = 50,
+                           warmup: int = 24, H: int = 12):
+    """Итерация 2 протокола: проверка на выборке, не участвовавшей в калибровке.
+
+    Данные — проекции на ``sample``; модель — реальный путь ставки с ``warmup`` месяцами разогрева до выборки."""
+    full = load_cbr_monthly()
+    dsample = slice_window(full, *sample).dropna(subset=["key_rate", *RATES])
+    data = {c: local_projection(dsample, c, H) for c in OUTCOMES}
+    start = dsample.index[0]
+    path = full.loc[start - warmup:dsample.index[-1], "key_rate"].to_numpy()
+    cfg = ModelConfig().replace(n_months=len(path), record_banks=False, record_network=False, **theta)
+    cfg.scenario.key_rate_start = float(path[0] / 100)
+    scn = Scenario("historical", key_rate=path / 100.0)
+    per = {c: [] for c in OUTCOMES}
+    for sd in range(n_seeds):
+        sector = _run(cfg, scn, sd).iloc[warmup:]
+        for c in OUTCOMES:
+            per[c].append(local_projection(sector, c, H)["beta"].to_numpy())
+    model = {}
+    for c, arr in per.items():
+        a = np.vstack(arr)
+        model[c] = pd.DataFrame({"h": np.arange(H + 1), "beta": np.nanmean(a, axis=0),
+                                 "lo90": np.nanpercentile(a, 5, axis=0), "hi90": np.nanpercentile(a, 95, axis=0)})
+    return data, model, evaluate(data, model)

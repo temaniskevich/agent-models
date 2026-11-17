@@ -41,6 +41,7 @@ class Window:
     calib: tuple[str, str]
     test: tuple[str, str]
     description: str = ""
+    lp: bool = False                # добавить в цель моменты реакций (локальные проекции)
 
 
 WINDOWS = {
@@ -48,19 +49,29 @@ WINDOWS = {
                 "Калибровка до 2014 г. (только объёмы) → проверка на кризисе 2014–15"),
     "B": Window("B", ("2017-01", "2021-12"), ("2022-01", "2022-12"),
                 "Калибровка 2017–2021 → проверка на 2022 г."),
+    "C": Window("C", ("2014-01", "2019-12"), ("2020-01", "2026-09"),
+                "Калибровка по реакциям на ключевую ставку 2014–2019 → проверка реакций 2020–2026", lp=True),
 }
+LP_HORIZONS = (3, 6, 12)
 
 
 # --------------------------------------------------------------------------
 # Данные
 # --------------------------------------------------------------------------
-def load_cbr_monthly(path: str | Path | None = None) -> pd.DataFrame:
+def load_cbr_monthly(path: str | Path | None = None, currency: str = "rub") -> pd.DataFrame:
+    """Месячные ряды ЦБ. ``currency="rub"`` (по умолчанию): объёмы кредитов и вкладов только в рублях —
+    в модели нет валюты, а валютная переоценка (особенно 2014–15 и 2022) искажает измеряемые реакции на ставку.
+    ``"all"`` — рубли и валюта вместе. Суммарные ряды при ``"rub"`` сохраняются в колонках ``*_all``."""
     p = Path(path) if path else DATA_DIR / "cbr_monthly.csv"
     if not p.exists():
         raise FileNotFoundError(f"Нет файла {p}. Выполните: python -I scripts/fetch_cbr_data.py")
     df = pd.read_csv(p, parse_dates=["date"])
     df.index = pd.PeriodIndex(df["date"], freq="M", name="date")
     df = df.drop(columns=["date"])
+    for c in ("loans_corp", "loans_retail", "deposits_corp", "deposits_retail"):
+        df[c + "_all"] = df[c]
+        if currency == "rub" and c + "_rub" in df:
+            df[c] = df[c + "_rub"]
     df["loans_total"] = df["loans_corp"] + df["loans_retail"]
     df["deposits_total"] = df["deposits_corp"] + df["deposits_retail"]
     df["cb_debt"] = df["cb_debt_stock"]
@@ -120,6 +131,20 @@ def compute_moments(df: pd.DataFrame) -> dict[str, float]:
     return m
 
 
+def lp_moments(df: pd.DataFrame, hs: tuple[int, ...] = LP_HORIZONS) -> tuple[dict[str, float], dict[str, float]]:
+    """Моменты реакций: β локальных проекций (на 1 п.п. ключевой ставки) и их дисперсии (SE²)."""
+    from .irf import OUTCOMES, local_projection
+    mom, var = {}, {}
+    for c in OUTCOMES:
+        if c not in df or df[c].notna().sum() < 40:
+            continue
+        lp = local_projection(df.dropna(subset=["key_rate", c]), c, hs=hs).set_index("h")
+        for h in hs:
+            if np.isfinite(lp.loc[h, "beta"]):
+                mom[f"lp.{c}.h{h}"], var[f"lp.{c}.h{h}"] = float(lp.loc[h, "beta"]), float(lp.loc[h, "se"]) ** 2
+    return mom, var
+
+
 def block_bootstrap_variance(df: pd.DataFrame, n_boot: int = 200, block: int = 12,
                              seed: int = 0) -> dict[str, float]:
     """Дисперсия моментов по скользящему блочному бутстрэпу окна данных."""
@@ -145,7 +170,7 @@ DEFAULT_MOMENT_SUFFIXES = (".growth_mean", ".spread", ".pass_through")
 
 
 def default_moment_filter(name: str) -> bool:
-    return name.endswith(DEFAULT_MOMENT_SUFFIXES)
+    return name.endswith(DEFAULT_MOMENT_SUFFIXES) or name.startswith("lp.")
 
 
 # --------------------------------------------------------------------------
@@ -176,11 +201,24 @@ DEFAULT_PARAMS: list[CalibParam] = [
 
 # Параметры, идентифицируемые по данным окна. В окне A (до 2014 г.) нет ставок банков, поэтому
 # подгоняются только тренды роста: остальные параметры не идентифицированы и остались бы произвольными.
+IRF_PARAMS: list[CalibParam] = DEFAULT_PARAMS + [
+    CalibParam("demand.loan_rate_elasticity.1", 0.2, 8.0),
+    CalibParam("demand.deposit_rate_semielasticity.1", 0.1, 3.0),
+    CalibParam("demand.loan_adjust_speed", 0.03, 0.5),
+    CalibParam("demand.deposit_adjust_speed", 0.03, 0.5),
+    CalibParam("banks.pass_through_loan.0", 0.2, 1.3),
+    CalibParam("banks.pass_through_loan.1", 0.2, 1.3),
+    CalibParam("banks.pass_through_deposit.0", 0.2, 1.3),
+    CalibParam("banks.pass_through_deposit.1", 0.2, 1.3),
+]
+
 VOLUME_ONLY_PARAMS = [p for p in DEFAULT_PARAMS if "_trend_growth" in p.name]
 
 
 def default_params(window: str) -> list[CalibParam]:
     """Набор параметров по умолчанию для окна калибровки."""
+    if window == "C":
+        return list(IRF_PARAMS)
     return list(VOLUME_ONLY_PARAMS if window == "A" else DEFAULT_PARAMS)
 
 
@@ -225,6 +263,14 @@ class SMMCalibrator:
         self.keys = [k for k, v in self.target.items()
                      if np.isfinite(v) and (moment_filter is None or moment_filter(k))]
         self.report_keys = [k for k, v in self.target.items() if np.isfinite(v)]
+        self.lp_hs = LP_HORIZONS if self.window.lp else None
+        if self.window.lp:                                    # моменты реакций: вес 1/SE² (не менее 0.02)
+            lp_m, lp_v = lp_moments(self.calib_df)
+            self.target.update(lp_m)
+            self.keys += [k for k in lp_m if (moment_filter is None or moment_filter(k))]
+            self.report_keys += list(lp_m)
+            floors.update({k: 0.02 for k in lp_m})
+            var.update(lp_v)
         self.weights = {k: 1.0 / max(var.get(k, np.nan) if np.isfinite(var.get(k, np.nan)) else 0.0,
                                      floors[k]) for k in self.keys}
         self.n_calib = len(self.calib_df)
@@ -262,7 +308,10 @@ class SMMCalibrator:
         runs = self.simulate_runs(theta)
         acc: dict[str, list[float]] = {}
         for r in runs:
-            for k, v in compute_moments(r).items():
+            mm = compute_moments(r)
+            if self.window.lp:
+                mm.update(lp_moments(r)[0])
+            for k, v in mm.items():
                 acc.setdefault(k, []).append(v)
         return {k: float(np.nanmean(v)) if np.isfinite(v).any() else np.nan for k, v in acc.items()}
 

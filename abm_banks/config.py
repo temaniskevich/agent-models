@@ -83,6 +83,8 @@ class BankConfig:
     rate_speed_loan: float = 0.30           # скорость подстройки ставок (мес.)
     rate_speed_deposit: float = 0.40
     rate_speed_sd: float = 0.06
+    pass_through_loan: tuple[float, float] = (1.0, 1.0)      # долгосрочный перенос ключевой ставки в кредитные (1 = полный)
+    pass_through_deposit: tuple[float, float] = (1.0, 1.0)   # то же для ставок по вкладам
     loan_rate_cap: float = 0.60
     deposit_rate_floor: float = 0.001
     float_share_loans: tuple[float, float] = (0.35, 0.10)    # доля кредитов с плавающей ставкой
