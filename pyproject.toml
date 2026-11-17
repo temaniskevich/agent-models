@@ -1,0 +1,31 @@
+[project]
+name = "abm-banks"
+version = "2.0.0"
+description = "Агентная модель банковского сектора России как генератор синтетических данных"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "plotly>=5.18",
+    "altair>=5.0",
+    "streamlit>=1.34",
+    "pyarrow>=14",
+    "pyyaml>=6",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+llm = ["openai>=1.0"]
+
+[tool.setuptools.packages.find]
+include = ["abm_banks*", "ui*"]
+
+[tool.setuptools.package-data]
+abm_banks = ["data/*.csv"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
