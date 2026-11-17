@@ -51,6 +51,8 @@ WINDOWS = {
                 "Калибровка 2017–2021 → проверка на 2022 г."),
     "C": Window("C", ("2014-01", "2019-12"), ("2020-01", "2026-09"),
                 "Калибровка по реакциям на ключевую ставку 2014–2019 → проверка реакций 2020–2026", lp=True),
+    "D": Window("D", ("2014-01", "2019-12"), ("2020-01", "2026-09"),
+                "Как C, плюс уход неудовлетворённого спроса (backlog_exit); итерация 4 протокола IRF", lp=True),
 }
 LP_HORIZONS = (3, 6, 12)
 
@@ -212,6 +214,8 @@ IRF_PARAMS: list[CalibParam] = DEFAULT_PARAMS + [
     CalibParam("banks.pass_through_deposit.1", 0.2, 1.3),
 ]
 
+IRF_BACKLOG_PARAMS: list[CalibParam] = IRF_PARAMS + [CalibParam("demand.backlog_exit", 0.0, 1.0)]
+
 VOLUME_ONLY_PARAMS = [p for p in DEFAULT_PARAMS if "_trend_growth" in p.name]
 
 
@@ -219,6 +223,8 @@ def default_params(window: str) -> list[CalibParam]:
     """Набор параметров по умолчанию для окна калибровки."""
     if window == "C":
         return list(IRF_PARAMS)
+    if window == "D":
+        return list(IRF_BACKLOG_PARAMS)
     return list(VOLUME_ONLY_PARAMS if window == "A" else DEFAULT_PARAMS)
 
 
