@@ -60,8 +60,20 @@ def group_of(target: str) -> str:
     return "ставки" if target in fc.RATE_T else "объёмы"
 
 
-def variants(shares=SHARES) -> list[str]:
-    return ["real"] + [f"{s}@{w}" for s in ("abm", "control") for w in shares]
+SOURCES = ("abm", "control", "twin")       # twin — линейный двойник (поправка, раздел 12 протокола)
+
+
+def variants(shares=SHARES, sources=("abm", "control")) -> list[str]:
+    return ["real"] + [f"{s}@{w}" for s in sources for w in shares]
+
+
+def _panels(abm, control, twin, only_src):
+    """Источники синтетики для обучения. ``only_src`` — только один источник (без вариантов real/naive): так варианты
+    twin добавляются к уже сохранённым прогнозам real/abm/control, не пересчитывая их."""
+    panels = {k: v for k, v in (("abm", abm), ("control", control), ("twin", twin)) if v is not None}
+    if only_src is not None:
+        panels = {only_src: panels[only_src]}
+    return panels
 
 
 # --------------------------------------------------------------------------
@@ -122,10 +134,10 @@ def synth_weights(n_real: int, n_syn: int, w: float) -> np.ndarray:
 # --------------------------------------------------------------------------
 # M1: ARX (как в пилоте, но одна точка обучения)
 # --------------------------------------------------------------------------
-def forecast_m1(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control: pd.DataFrame,
-                shares=SHARES) -> pd.DataFrame:
+def forecast_m1(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame | None, control: pd.DataFrame | None,
+                shares=SHARES, twin: pd.DataFrame | None = None, only_src: str | None = None) -> pd.DataFrame:
     rows = []
-    panels = {"abm": abm, "control": control}
+    panels = _panels(abm, control, twin, only_src)
     for t in window.targets:
         Xnew_all = fc.predictors(real, t)
         for h in HORIZONS:
@@ -139,9 +151,10 @@ def forecast_m1(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control:
                 if x_new.isna().any():
                     continue
                 ones = np.ones(len(train))
-                preds = {"naive": fc.naive_forecast(real, t, t0),
-                         "real": fc.fit_predict(train, ones, x_new),
-                         "real_shrunk": fc.fit_predict(train, ones, x_new, ridge=1.0)}
+                preds = {} if only_src is not None else {
+                    "naive": fc.naive_forecast(real, t, t0),
+                    "real": fc.fit_predict(train, ones, x_new),
+                    "real_shrunk": fc.fit_predict(train, ones, x_new, ridge=1.0)}
                 for src, syn in pools.items():
                     for w in shares:
                         comb = pd.concat([train, syn], ignore_index=True)
@@ -155,13 +168,14 @@ def forecast_m1(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control:
 # --------------------------------------------------------------------------
 # M2: градиентный бустинг (родной интерфейс lightgbm; sklearn не нужен)
 # --------------------------------------------------------------------------
-def forecast_m2(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control: pd.DataFrame,
-                shares=SHARES, lgb_seed: int = 0) -> pd.DataFrame:
+def forecast_m2(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame | None, control: pd.DataFrame | None,
+                shares=SHARES, lgb_seed: int = 0, twin: pd.DataFrame | None = None,
+                only_src: str | None = None) -> pd.DataFrame:
     import lightgbm as lgb                                   # только здесь: не смешивать с torch в одном процессе
 
     series = list(window.targets)
     rows = []
-    panels = {"abm": abm, "control": control}
+    panels = _panels(abm, control, twin, only_src)
     for t in window.targets:
         feats = m2_features(real, t, series)
         pools = {src: m2_pool(p, t, series) for src, p in panels.items()}
@@ -175,8 +189,8 @@ def forecast_m2(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control:
                 continue
             X_new = feats.loc[[t0 for _, t0, _ in cases]].to_numpy(float)
             Xr, yr = train[cols].to_numpy(float), train["y"].to_numpy(float)
-            specs = {"real": (Xr, yr, np.ones(len(yr)))}
-            for src in ("abm", "control"):
+            specs = {} if only_src is not None else {"real": (Xr, yr, np.ones(len(yr)))}
+            for src in panels:
                 syn = pools[src][h]
                 Xs, ys = syn[cols].to_numpy(float), syn["y"].to_numpy(float)
                 for w in shares:
@@ -203,3 +217,8 @@ def load_panels(theta: str, cache_dir, rep: int = 0) -> tuple[pd.DataFrame, pd.D
     abm = pd.read_parquet(d / f"panel_abm_{theta}{s}.parquet")
     ctl = pd.read_parquet(d / f"panel_control_{theta}{s}.parquet")
     return abm, ctl
+
+
+def load_twin(theta: str, cache_dir, rep: int = 0) -> pd.DataFrame:
+    from pathlib import Path
+    return pd.read_parquet(Path(cache_dir) / f"panel_twin_{theta}{rep_suffix(rep)}.parquet")

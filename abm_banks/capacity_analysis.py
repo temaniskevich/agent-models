@@ -17,14 +17,15 @@ HELP, HARM = 0.95, 1.05
 SHARE_BETTER = 0.6
 
 
-def load_errors(directory, windows, models=MODELS, rep: int = 0) -> pd.DataFrame:
+def load_errors(directory, windows, models=MODELS, rep: int = 0, twin: bool = False) -> pd.DataFrame:
     parts = []
     sfx = "" if rep == 0 else f"_r{rep}"
     for w in windows:
         for m in models:
-            p = Path(directory) / f"{w}_{m}{sfx}.csv"
-            if p.exists():
-                parts.append(pd.read_csv(p))
+            for tag in ("", "_twin"):                # *_twin — варианты twin@w (раздел 12 протокола)
+                p = Path(directory) / f"{w}_{m}{tag}{sfx}.csv"
+                if p.exists() and (tag == "" or twin):
+                    parts.append(pd.read_csv(p))
     if not parts:
         raise FileNotFoundError("нет файлов прогнозов")
     e = pd.concat(parts, ignore_index=True)
@@ -86,6 +87,9 @@ def summary_table(c: pd.DataFrame, shares=(0.25, 0.5, 0.75, 0.9)) -> pd.DataFram
     rows = []
     comps = {"abm/real": ("abm@{w}", "real"), "control/real": ("control@{w}", "real"),
              "abm/control": ("abm@{w}", "control@{w}")}
+    if (c["variant"].str.startswith("twin@")).any():
+        comps.update({"abm/twin": ("abm@{w}", "twin@{w}"), "twin/control": ("twin@{w}", "control@{w}"),
+                      "twin/real": ("twin@{w}", "real")})
     for w in shares:
         for name, (num, den) in comps.items():
             r = ratios(c, num.format(w=w), den.format(w=w))
@@ -104,16 +108,18 @@ def _get(summ: pd.DataFrame, model, group, comp, w=MAIN_SHARE):
     return (float(d["ratio"].iloc[0]), str(d["verdict"].iloc[0])) if len(d) else (np.nan, "нет данных")
 
 
-def _window_verdict(c: pd.DataFrame, model: str, group: str, window: str, w=MAIN_SHARE) -> str:
-    r = ratios(c, f"abm@{w}", f"control@{w}")
+def _window_verdict(c: pd.DataFrame, model: str, group: str, window: str, w=MAIN_SHARE, ctl: str = "control") -> str:
+    r = ratios(c, f"abm@{w}", f"{ctl}@{w}")
     d = r[(r["model"] == model) & (r["group"] == group) & (r["window"] == window)]
     if d.empty:
         return "нет данных"
     return verdict(_gm(d["ratio"]), float((d["ratio"] < 1).mean()))
 
 
-def hypotheses(c: pd.DataFrame, summ: pd.DataFrame) -> dict[str, str]:
+def hypotheses(c: pd.DataFrame, summ: pd.DataFrame, ctl: str = "control") -> dict[str, str]:
+    """H1–H3 по разделу 6. ``ctl="twin"`` — H2/H3 с линейным двойником вместо контроля (раздел 12)."""
     out = {}
+    ac = f"abm/{ctl}"
     # H1: R(abm/real) у M3 не больше, чем у M1, минус 0,05 — для ставок и объёмов
     conf, refu, det = [], [], []
     for g in ("ставки", "объёмы"):
@@ -124,11 +130,11 @@ def hypotheses(c: pd.DataFrame, summ: pd.DataFrame) -> dict[str, str]:
         refu.append(np.isfinite(r1) and np.isfinite(r3) and r3 >= r1)
     out["H1"] = ("подтверждена" if all(conf) else "опровергнута" if all(refu) else "не определена") + " (" + "; ".join(det) + ")"
     # H2: ставки, abm против control
-    helps = {m: _get(summ, m, "ставки", "abm/control")[1] == "помогает" for m in MODELS}
-    win_ok = {m: all(_window_verdict(c, m, "ставки", w) == "помогает" for w in ("B", "E")) for m in ("M2", "M3")}
-    r1, _ = _get(summ, "M1", "ставки", "abm/control")
-    r3, _ = _get(summ, "M3", "ставки", "abm/control")
-    detail = f"R(abm/control) на ставках: M1 {r1:.3f}, M2 {_get(summ, 'M2', 'ставки', 'abm/control')[0]:.3f}, M3 {r3:.3f}"
+    helps = {m: _get(summ, m, "ставки", ac)[1] == "помогает" for m in MODELS}
+    win_ok = {m: all(_window_verdict(c, m, "ставки", w, ctl=ctl) == "помогает" for w in ("B", "E")) for m in ("M2", "M3")}
+    r1, _ = _get(summ, "M1", "ставки", ac)
+    r3, _ = _get(summ, "M3", "ставки", ac)
+    detail = f"R({ac}) на ставках: M1 {r1:.3f}, M2 {_get(summ, 'M2', 'ставки', ac)[0]:.3f}, M3 {r3:.3f}"
     if any(helps[m] and win_ok[m] for m in ("M2", "M3")) and np.isfinite(r1) and r3 < r1:
         h2 = "подтверждена"
     elif not any(helps.values()) and np.isfinite(r1) and np.isfinite(r3) and r3 >= r1:
@@ -137,11 +143,11 @@ def hypotheses(c: pd.DataFrame, summ: pd.DataFrame) -> dict[str, str]:
         h2 = "не определена: зависит от ступени/окна"
     out["H2"] = h2 + f" ({detail})"
     # H3: объёмы
-    helps_v = {m: _get(summ, m, "объёмы", "abm/control")[1] == "помогает" for m in MODELS}
-    n_win = {m: sum(_window_verdict(c, m, "объёмы", w) == "помогает" for w in ("A", "B", "E")) for m in MODELS}
-    r1, _ = _get(summ, "M1", "объёмы", "abm/control")
-    r3, _ = _get(summ, "M3", "объёмы", "abm/control")
-    detail = f"R(abm/control) на объёмах: M1 {r1:.3f}, M2 {_get(summ, 'M2', 'объёмы', 'abm/control')[0]:.3f}, M3 {r3:.3f}"
+    helps_v = {m: _get(summ, m, "объёмы", ac)[1] == "помогает" for m in MODELS}
+    n_win = {m: sum(_window_verdict(c, m, "объёмы", w, ctl=ctl) == "помогает" for w in ("A", "B", "E")) for m in MODELS}
+    r1, _ = _get(summ, "M1", "объёмы", ac)
+    r3, _ = _get(summ, "M3", "объёмы", ac)
+    detail = f"R({ac}) на объёмах: M1 {r1:.3f}, M2 {_get(summ, 'M2', 'объёмы', ac)[0]:.3f}, M3 {r3:.3f}"
     if any(n >= 2 for n in n_win.values()):
         h3 = "опровергнута"
     elif not any(helps_v.values()) and np.isfinite(r1) and np.isfinite(r3) and r3 > r1:
@@ -239,3 +245,101 @@ def noise_table(directory, reps=range(0, 6), w: float = MAIN_SHARE) -> pd.DataFr
                          "mean": float(np.nanmean(v)), "sd": float(np.nanstd(v, ddof=1)), "min": float(np.nanmin(v)),
                          "max": float(np.nanmax(v)), "n_lt1": int((v < 1).sum()), "decision": noise_decision(v, mode)})
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------
+# Линейный двойник (поправка 18.11.2026 к протоколу, раздел 12)
+# --------------------------------------------------------------------------
+def _rep_cells(directory, reps) -> dict[int, pd.DataFrame]:
+    return {k: cells(load_errors(directory, ("B", "A", "E"), rep=k, twin=True)) for k in reps}
+
+
+def twin_table(directory, reps=range(0, 6), w: float = MAIN_SHARE, per_rep: dict | None = None) -> pd.DataFrame:
+    """Статистики T1–T5 по запускам: по строке на (статистика, модель)."""
+    per_rep = per_rep if per_rep is not None else _rep_cells(directory, reps)
+    comps = {"abm/twin": (f"abm@{w}", f"twin@{w}"), "twin/control": (f"twin@{w}", f"control@{w}"),
+             "twin/real": (f"twin@{w}", "real")}
+    specs = [("T1 abm/twin ставки B+E", "abm/twin", "ставки", NOISE_WINDOWS, "help", MODELS),
+             ("T2 twin/control ставки B+E", "twin/control", "ставки", NOISE_WINDOWS, "help", MODELS),
+             ("T3 abm/twin объёмы B+E", "abm/twin", "объёмы", NOISE_WINDOWS, "harm", MODELS),
+             ("T3A abm/twin объёмы A", "abm/twin", "объёмы", ("A",), "harm", ("M1", "M2")),
+             ("T4 twin/real ставки B+E", "twin/real", "ставки", NOISE_WINDOWS, "help", MODELS)]
+    specs += [(f"T5 abm/twin ставки {w_}", "abm/twin", "ставки", (w_,), "help", MODELS) for w_ in NOISE_WINDOWS]
+    rows = []
+    for sid, comp, group, wins, mode, models in specs:
+        num, den = comps[comp]
+        for model in models:
+            vals = [pooled(ratios(c, num, den), model, group, windows=wins)[0] for c in per_rep.values()]
+            v = np.asarray(vals, float)
+            rows.append({"stat": sid, "model": model, **{f"r{k}": x for k, x in zip(per_rep, vals)},
+                         "mean": float(np.nanmean(v)), "sd": float(np.nanstd(v, ddof=1)) if len(v) > 1 else np.nan,
+                         "min": float(np.nanmin(v)), "max": float(np.nanmax(v)), "n_lt1": int((v < 1).sum()),
+                         "decision": noise_decision(v, mode)})
+    return pd.DataFrame(rows)
+
+
+def _vals(t: pd.DataFrame, stat_prefix: str, model: str) -> np.ndarray:
+    row = t[(t["stat"].str.startswith(stat_prefix)) & (t["model"] == model)]
+    if row.empty:
+        return np.array([])
+    cols = [c for c in t.columns if c.startswith("r") and c[1:].isdigit()]
+    return row[cols].to_numpy(float)[0]
+
+
+def twin_decision(t: pd.DataFrame, model: str = "M3") -> str:
+    """Правило вывода раздела 12 по главному сигналу (ставки)."""
+    v1, v2 = _vals(t, "T1 ", model), _vals(t, "T2 ", model)
+    vb, ve = _vals(t, "T5 abm/twin ставки B", model), _vals(t, "T5 abm/twin ставки E", model)
+    d1, d2 = noise_decision(v1, "help"), noise_decision(v2, "help")
+    if d1 == "шум" and d2 == "устойчиво":
+        out = "сигнал объясняется линейной динамикой симулятора"
+    elif d1 == "устойчиво" and np.nanmean(v1) <= HELP and (vb < 1).sum() >= 5 and (ve < 1).sum() >= 5:
+        out = "сигнал выходит за пределы линейной динамики"
+    elif d1 == "устойчиво":
+        out = "нелинейный вклад устойчив по знаку, но мал"
+    else:
+        out = "не определено"
+    if noise_decision(v1, "harm") == "устойчиво (вред)":
+        out += "; нелинейная часть симулятора на ставках вредит (двойник устойчиво лучше)"
+    return out + f" [T1: {d1}, m = {np.nanmean(v1):.3f}; T2: {d2}, m = {np.nanmean(v2):.3f}]"
+
+
+def averaged_summary(per_rep: dict[int, pd.DataFrame], w: float = MAIN_SHARE) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Усреднённые по запускам сводки: (а) таблица в формате ``summary_table`` (отношение и доля ячеек < 1 — средние по запускам),
+    (б) средние по запускам оконные отношения и доли для правил H2/H3."""
+    summ = pd.concat([summary_table(c, shares=(w,)).assign(rep=k) for k, c in per_rep.items()], ignore_index=True)
+    s = (summ.groupby(["model", "group", "share_w", "comparison"])[["ratio", "share_better"]].mean().reset_index())
+    s["verdict"] = [verdict(r, sh) for r, sh in zip(s["ratio"], s["share_better"])]
+    win_rows = []
+    for k, c in per_rep.items():
+        for ctl in ("control", "twin"):
+            r = ratios(c, f"abm@{w}", f"{ctl}@{w}")
+            for (model, group, window), d in r.groupby(["model", "group", "window"]):
+                win_rows.append({"rep": k, "ctl": ctl, "model": model, "group": group, "window": window,
+                                 "ratio": _gm(d["ratio"]), "share_better": float((d["ratio"] < 1).mean())})
+    wins = pd.DataFrame(win_rows).groupby(["ctl", "model", "group", "window"])[["ratio", "share_better"]].mean().reset_index()
+    return s, wins
+
+
+def h2_averaged(per_rep: dict[int, pd.DataFrame], ctl: str = "twin", w: float = MAIN_SHARE) -> str:
+    """Правило H2 (раздел 6) по усреднённым за запуски сводкам, с ``ctl`` вместо контроля."""
+    s, wins = averaged_summary(per_rep, w)
+    ac = f"abm/{ctl}"
+
+    def get(model):
+        d = s[(s["model"] == model) & (s["group"] == "ставки") & (s["comparison"] == ac)]
+        return (float(d["ratio"].iloc[0]), str(d["verdict"].iloc[0])) if len(d) else (np.nan, "нет данных")
+
+    def win_v(model, window):
+        d = wins[(wins["ctl"] == ctl) & (wins["model"] == model) & (wins["group"] == "ставки") & (wins["window"] == window)]
+        return verdict(float(d["ratio"].iloc[0]), float(d["share_better"].iloc[0])) if len(d) else "нет данных"
+
+    helps = {m: get(m)[1] == "помогает" for m in MODELS}
+    win_ok = {m: all(win_v(m, x) == "помогает" for x in ("B", "E")) for m in ("M2", "M3")}
+    r1, r2, r3 = get("M1")[0], get("M2")[0], get("M3")[0]
+    detail = f"R({ac}) на ставках, среднее по запускам: M1 {r1:.3f}, M2 {r2:.3f}, M3 {r3:.3f}; окна M3: B {win_v('M3', 'B')}, E {win_v('M3', 'E')}"
+    if any(helps[m] and win_ok[m] for m in ("M2", "M3")) and np.isfinite(r1) and r3 < r1:
+        return "подтверждена (" + detail + ")"
+    if not any(helps.values()) and np.isfinite(r1) and np.isfinite(r3) and r3 >= r1:
+        return "опровергнута (" + detail + ")"
+    return "не определена: зависит от ступени/окна (" + detail + ")"

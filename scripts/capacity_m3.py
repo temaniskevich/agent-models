@@ -25,9 +25,13 @@ def run_job(args):
     from abm_banks import capacity_m3 as m3
     from abm_banks import forecasting as fc
     w = cp.WINDOWS[name]
-    abm, ctl = cp.load_panels(w.theta, panels, rep)
     seeds = (0, 1, 2) if rep == 0 else (10 * rep, 10 * rep + 1, 10 * rep + 2)
-    df = m3.forecast_m3(w, fc.load_real(), abm, ctl, seeds=seeds, only_src=src)
+    if src == "twin":
+        df = m3.forecast_m3(w, fc.load_real(), None, None, seeds=seeds, only_src="twin",
+                            twin=cp.load_twin(w.theta, panels, rep))
+    else:
+        abm, ctl = cp.load_panels(w.theta, panels, rep)
+        df = m3.forecast_m3(w, fc.load_real(), abm, ctl, seeds=seeds, only_src=src)
     print(f"{name} {src}: {len(df)} прогнозов", flush=True)
     return name, df
 
@@ -39,13 +43,16 @@ def main() -> None:
     ap.add_argument("--out", default="outputs/capacity")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--rep", type=int, default=0, help="повтор проверки шума: другая синтетика, зёрна сети 10·rep…10·rep+2")
+    ap.add_argument("--twin", action="store_true", help="только варианты twin@w (раздел 12 протокола) → файлы *_M3_twin*.csv")
     a = ap.parse_args()
-    jobs = [(n, s, a.panels, a.rep) for n in a.windows for s in ("real", "abm", "control")]
+    srcs = ("twin",) if a.twin else ("real", "abm", "control")
+    tag = "_twin" if a.twin else ""
+    jobs = [(n, s, a.panels, a.rep) for n in a.windows for s in srcs]
     with mp.get_context("spawn").Pool(a.jobs) as pool:
         results = pool.map(run_job, jobs, chunksize=1)
     for name in a.windows:
         df = pd.concat([d for n, d in results if n == name], ignore_index=True)
-        path = Path(a.out) / f"{name}_M3{rep_suffix(a.rep)}.csv"
+        path = Path(a.out) / f"{name}_M3{tag}{rep_suffix(a.rep)}.csv"
         df.to_csv(path, index=False)
         print(f"{name} M3: {len(df)} прогнозов → {path}")
 

@@ -208,15 +208,17 @@ def _predict(window: CWindow, real: pd.DataFrame, series, net: Net, st: Stats) -
     return pd.DataFrame(rows)
 
 
-def forecast_m3(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control: pd.DataFrame,
-                shares=SHARES, seeds=(0, 1, 2), only_src: str | None = None) -> pd.DataFrame:
-    """Прогнозы M3 по всем вариантам; среднее по зёрнам. ``only_src`` (real|abm|control) — для запуска по частям."""
+def forecast_m3(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame | None, control: pd.DataFrame | None,
+                shares=SHARES, seeds=(0, 1, 2), only_src: str | None = None,
+                twin: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Прогнозы M3 по всем вариантам; среднее по зёрнам. ``only_src`` (real|abm|control|twin) — для запуска по частям."""
     series = list(window.targets)
-    syn = {"abm": synthetic_samples(abm, series), "control": synthetic_samples(control, series)}
+    panels = {k: v for k, v in (("abm", abm), ("control", control), ("twin", twin)) if v is not None}
+    syn = {k: synthetic_samples(v, series) for k, v in panels.items() if only_src in (None, k)}
     jobs = []
     if only_src in (None, "real"):
         jobs.append(("real", "real", 0.0))
-    for src in ("abm", "control"):
+    for src in panels:
         if only_src in (None, src):
             jobs += [(f"{src}@{w}", src, w) for w in shares]
     out = []

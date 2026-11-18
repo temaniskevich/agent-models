@@ -18,7 +18,7 @@ from scipy import stats
 from .batch import DEFAULT_PARAM_RANGES, generate_synthetic
 from .calibration import DATA_DIR, load_cbr_monthly
 from .config import ModelConfig
-from .synthetic import ARJumpControl
+from .synthetic import ARJumpControl, LinearTwin
 
 RATE_T = ["lr_c", "lr_r", "dr_c", "dr_r"]            # ставки: кредиты/вклады × организации/население
 GROWTH_T = ["g_lc", "g_lr", "g_dc", "g_dr"]          # рост, % годовых (1200·Δln)
@@ -136,6 +136,13 @@ def make_control_panel(abm_panel: pd.DataFrame, n_runs: int, months: int, seed: 
     for c in RATE_T:
         sim[c] = sim[c].clip(lower=0.1)
     return sim
+
+
+def make_twin_panel(abm_panel: pd.DataFrame, seed: int) -> tuple[pd.DataFrame, LinearTwin]:
+    """Линейный двойник агентной панели (протокол эксперимента, раздел 12): VARX(p, 12) с фиксированными эффектами историй,
+    те же пути ключевой ставки и начальные условия, бутстрэп остатков."""
+    twin = LinearTwin().fit(abm_panel)
+    return twin.simulate(abm_panel, seed=seed), twin
 
 
 def pool_supervised(panel: pd.DataFrame, target: str, h: int) -> pd.DataFrame:
