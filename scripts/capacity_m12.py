@@ -23,15 +23,16 @@ def main() -> None:
     ap.add_argument("--panels", default="outputs/capacity")
     ap.add_argument("--out", default="outputs/capacity")
     ap.add_argument("--models", nargs="+", default=["M1", "M2"], choices=["M1", "M2"])
+    ap.add_argument("--rep", type=int, default=0, help="повтор проверки шума: другая синтетика, зерно бустинга = rep")
     a = ap.parse_args()
     real = fc.load_real()
     for name in a.windows:
         w = cp.WINDOWS[name]
-        abm, ctl = cp.load_panels(w.theta, a.panels)
+        abm, ctl = cp.load_panels(w.theta, a.panels, a.rep)
         for model in a.models:
-            fn = cp.forecast_m1 if model == "M1" else cp.forecast_m2
-            df = fn(w, real, abm, ctl)
-            path = Path(a.out) / f"{name}_{model}.csv"
+            df = (cp.forecast_m1(w, real, abm, ctl) if model == "M1"
+                  else cp.forecast_m2(w, real, abm, ctl, lgb_seed=a.rep))
+            path = Path(a.out) / f"{name}_{model}{cp.rep_suffix(a.rep)}.csv"
             df.to_csv(path, index=False)
             print(f"{name} {model}: {len(df)} прогнозов → {path}", flush=True)
 

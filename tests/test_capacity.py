@@ -104,3 +104,11 @@ M3_SCRIPT = textwrap.dedent("""
 def test_m3_in_subprocess_deterministic_and_no_lookahead():
     r = subprocess.run([sys.executable, "-c", M3_SCRIPT], capture_output=True, text=True, timeout=600)
     assert r.returncode == 0 and r.stdout.strip().endswith("ok"), r.stderr[-1500:]
+
+
+def test_noise_decision_rules():
+    assert ca.noise_decision([0.90, 0.92, 0.95, 0.91, 0.93, 0.94]) == "устойчиво"
+    assert ca.noise_decision([1.10, 1.00, 0.90, 1.05, 0.95, 1.00]) == "шум"
+    assert ca.noise_decision([0.90, 0.95, 0.97, 1.02, 1.03, 0.99]) == "не определён"
+    assert ca.noise_decision([1.10, 1.12, 1.08, 1.10, 1.09, 1.11], "harm") == "устойчиво (вред)"
+    assert ca.noise_decision([1.0, 1.0]).startswith("недостаточно")

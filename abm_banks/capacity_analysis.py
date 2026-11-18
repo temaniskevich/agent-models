@@ -17,11 +17,12 @@ HELP, HARM = 0.95, 1.05
 SHARE_BETTER = 0.6
 
 
-def load_errors(directory, windows, models=MODELS) -> pd.DataFrame:
+def load_errors(directory, windows, models=MODELS, rep: int = 0) -> pd.DataFrame:
     parts = []
+    sfx = "" if rep == 0 else f"_r{rep}"
     for w in windows:
         for m in models:
-            p = Path(directory) / f"{w}_{m}.csv"
+            p = Path(directory) / f"{w}_{m}{sfx}.csv"
             if p.exists():
                 parts.append(pd.read_csv(p))
     if not parts:
@@ -185,3 +186,56 @@ def dm_table(e: pd.DataFrame, w: float = MAIN_SHARE) -> pd.DataFrame:
     if not t.empty:
         t["p_holm"] = t.groupby("model")["p_value"].transform(lambda s: holm(s.to_numpy()))
     return t
+
+
+# --------------------------------------------------------------------------
+# Проверка шума (поправка 19.11.2026 к протоколу, раздел 11)
+# --------------------------------------------------------------------------
+NOISE_WINDOWS = ("B", "E")
+
+
+def noise_decision(values, mode: str = "help") -> str:
+    """Правило поправки. ``help``: устойчиво, если n(<1) ≥ 5 и m + 2·s/√n < 1; шум, если n(<1) ≤ 3 или m ≥ 1.
+    ``harm``: зеркально — устойчиво (вред), если n(>1) ≥ 5 и m − 2·s/√n > 1; шум, если n(>1) ≤ 3 или m ≤ 1."""
+    v = np.asarray([x for x in values if np.isfinite(x)], float)
+    n = len(v)
+    if n < 6:
+        return f"недостаточно запусков ({n})"
+    m, s = float(v.mean()), float(v.std(ddof=1))
+    se = s / np.sqrt(n)
+    if mode == "help":
+        k = int((v < 1).sum())
+        return "устойчиво" if (k >= 5 and m + 2 * se < 1) else "шум" if (k <= 3 or m >= 1) else "не определён"
+    k = int((v > 1).sum())
+    return "устойчиво (вред)" if (k >= 5 and m - 2 * se > 1) else "шум" if (k <= 3 or m <= 1) else "не определён"
+
+
+def noise_table(directory, reps=range(0, 6), w: float = MAIN_SHARE) -> pd.DataFrame:
+    """Статистики S1–S4 по запускам: по строке на (статистика, модель)."""
+    per_rep = {}
+    for k in reps:
+        e = load_errors(directory, NOISE_WINDOWS + (("A",) if True else ()), rep=k)
+        per_rep[k] = cells(e)
+    comps = {"abm/control": (f"abm@{w}", f"control@{w}"), "abm/real": (f"abm@{w}", "real"),
+             "control/real": (f"control@{w}", "real")}
+    specs = []                                     # (id, comparison, group, windows, mode, models)
+    specs += [("S1 abm/control ставки B+E", "abm/control", "ставки", NOISE_WINDOWS, "help", MODELS)]
+    specs += [("S2a abm/real ставки B+E", "abm/real", "ставки", NOISE_WINDOWS, "help", MODELS)]
+    specs += [("S2b control/real ставки B+E", "control/real", "ставки", NOISE_WINDOWS, "help", MODELS)]
+    specs += [("S3a abm/control объёмы B+E", "abm/control", "объёмы", NOISE_WINDOWS, "harm", MODELS)]
+    specs += [("S3b abm/real объёмы B+E", "abm/real", "объёмы", NOISE_WINDOWS, "help", MODELS)]
+    specs += [("S3c abm/control объёмы A", "abm/control", "объёмы", ("A",), "harm", ("M1", "M2"))]
+    specs += [(f"S4 abm/control ставки {w_}", "abm/control", "ставки", (w_,), "help", ("M3",)) for w_ in NOISE_WINDOWS]
+    rows = []
+    for sid, comp, group, wins, mode, models in specs:
+        num, den = comps[comp]
+        for model in models:
+            vals = []
+            for k, c in per_rep.items():
+                r = ratios(c, num, den)
+                vals.append(pooled(r, model, group, windows=wins)[0])
+            v = np.asarray(vals, float)
+            rows.append({"stat": sid, "model": model, **{f"r{k}": x for k, x in zip(per_rep, vals)},
+                         "mean": float(np.nanmean(v)), "sd": float(np.nanstd(v, ddof=1)), "min": float(np.nanmin(v)),
+                         "max": float(np.nanmax(v)), "n_lt1": int((v < 1).sum()), "decision": noise_decision(v, mode)})
+    return pd.DataFrame(rows)

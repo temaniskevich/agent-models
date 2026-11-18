@@ -22,15 +22,18 @@ def main() -> None:
     ap.add_argument("--runs", type=int, default=300)
     ap.add_argument("--months", type=int, default=120)
     ap.add_argument("--seed", type=int, default=12345)
+    ap.add_argument("--rep", type=int, default=0, help="повтор проверки шума (поправка 19.11.2026): зерно = seed + 1000·rep")
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--out", default="outputs/capacity")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    abm = fc.make_abm_panel(fc.load_theta(a.theta), a.runs, a.months, a.seed, a.jobs)
-    control = fc.make_control_panel(abm, a.runs, a.months, a.seed + 1)
-    abm.to_parquet(out / f"panel_abm_{a.theta}.parquet")
-    control.to_parquet(out / f"panel_control_{a.theta}.parquet")
+    seed = a.seed + 1000 * a.rep
+    sfx = "" if a.rep == 0 else f"_r{a.rep}"
+    abm = fc.make_abm_panel(fc.load_theta(a.theta), a.runs, a.months, seed, a.jobs)
+    control = fc.make_control_panel(abm, a.runs, a.months, seed + 1)
+    abm.to_parquet(out / f"panel_abm_{a.theta}{sfx}.parquet")
+    control.to_parquet(out / f"panel_control_{a.theta}{sfx}.parquet")
     print(f"θ={a.theta}: агентная панель {abm.shape}, контроль {control.shape} → {out}")
 
 

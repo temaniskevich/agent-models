@@ -156,7 +156,7 @@ def forecast_m1(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control:
 # M2: градиентный бустинг (родной интерфейс lightgbm; sklearn не нужен)
 # --------------------------------------------------------------------------
 def forecast_m2(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control: pd.DataFrame,
-                shares=SHARES) -> pd.DataFrame:
+                shares=SHARES, lgb_seed: int = 0) -> pd.DataFrame:
     import lightgbm as lgb                                   # только здесь: не смешивать с torch в одном процессе
 
     series = list(window.targets)
@@ -183,7 +183,7 @@ def forecast_m2(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control:
                     specs[f"{src}@{w}"] = (np.vstack([Xr, Xs]), np.concatenate([yr, ys]),
                                            np.concatenate([np.ones(len(yr)), synth_weights(len(yr), len(ys), w)]))
             for v, (X, y, wt) in specs.items():
-                booster = lgb.train(LGB_PARAMS, lgb.Dataset(X, y, weight=wt, free_raw_data=True), num_boost_round=LGB_ROUNDS)
+                booster = lgb.train({**LGB_PARAMS, "seed": lgb_seed}, lgb.Dataset(X, y, weight=wt, free_raw_data=True), num_boost_round=LGB_ROUNDS)
                 for (m, t0, truth), p in zip(cases, booster.predict(X_new)):
                     rows.append(_row("M2", window, v, t, h, m, p, truth))
     return pd.DataFrame(rows)
@@ -192,9 +192,14 @@ def forecast_m2(window: CWindow, real: pd.DataFrame, abm: pd.DataFrame, control:
 # --------------------------------------------------------------------------
 # Синтетические панели (кэш на диске)
 # --------------------------------------------------------------------------
-def load_panels(theta: str, cache_dir) -> tuple[pd.DataFrame, pd.DataFrame]:
+def rep_suffix(rep: int) -> str:
+    """Запуск 0 — основной (имена файлов без суффикса); повторы проверки шума k ≥ 1 — суффикс _r{k}."""
+    return "" if rep == 0 else f"_r{rep}"
+
+
+def load_panels(theta: str, cache_dir, rep: int = 0) -> tuple[pd.DataFrame, pd.DataFrame]:
     from pathlib import Path
-    d = Path(cache_dir)
-    abm = pd.read_parquet(d / f"panel_abm_{theta}.parquet")
-    ctl = pd.read_parquet(d / f"panel_control_{theta}.parquet")
+    d, s = Path(cache_dir), rep_suffix(rep)
+    abm = pd.read_parquet(d / f"panel_abm_{theta}{s}.parquet")
+    ctl = pd.read_parquet(d / f"panel_control_{theta}{s}.parquet")
     return abm, ctl
