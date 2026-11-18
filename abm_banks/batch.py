@@ -25,7 +25,7 @@ def _scenario_to_dict(s: Scenario | None) -> dict | None:
         return None
     return {"name": s.name, "key_rate": s.key_rate.tolist(), "credit_stress": s.credit_stress.tolist(),
             "confidence": s.confidence.tolist(), "deposit_shock": s.deposit_shock.tolist(),
-            "demand_shock": s.demand_shock.tolist(), "meta": s.meta}
+            "demand_shock": s.demand_shock.tolist(), "rw_retail_mult": s.rw_retail_mult.tolist(), "meta": s.meta}
 
 
 def _scenario_from_dict(d: dict | None) -> Scenario | None:
@@ -34,6 +34,7 @@ def _scenario_from_dict(d: dict | None) -> Scenario | None:
     return Scenario(name=d["name"], key_rate=np.array(d["key_rate"]),
                     credit_stress=np.array(d["credit_stress"]), confidence=np.array(d["confidence"]),
                     deposit_shock=np.array(d["deposit_shock"]), demand_shock=np.array(d["demand_shock"]),
+                    rw_retail_mult=np.array(d["rw_retail_mult"]) if "rw_retail_mult" in d else None,
                     meta=d.get("meta", {}))
 
 

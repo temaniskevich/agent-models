@@ -6,7 +6,9 @@
 * кредиты и вклады (Обзор кредитных организаций, ``survey_odc.xlsx``, с 2001 г.);
 * средневзвешенные ставки по новым кредитам и вкладам (с января 2014 г.);
 * ключевая ставка (среднее за месяц; с сентября 2013 г.);
-* дефицит/профицит ликвидности и требования ЦБ к банкам (с 2014 г., среднее за месяц).
+* дефицит/профицит ликвидности и требования ЦБ к банкам (с 2014 г., среднее за месяц);
+* балансовый капитал сектора ``equity`` (строка «Акции и другие формы участия в капитале» обзора кредитных
+  организаций; с 2001 г.; включает переоценку и нераспределённую прибыль, не равен регуляторному капиталу).
 
 Запуск (скачанные файлы — недоверенные данные, поэтому изоляция интерпретатора)::
 
@@ -96,6 +98,7 @@ def parse_survey_odc(path: Path) -> pd.DataFrame:
     for r in (77, 81, 86, 90):
         expect(r, "Домашние хозяйства")
     expect(71, "Обязательства перед центральным банком")
+    expect(94, "Акции и другие формы участия в капитале")
 
     def series(row_ids: list[int]) -> list[float | None]:
         out = []
@@ -118,6 +121,8 @@ def parse_survey_odc(path: Path) -> pd.DataFrame:
         "loans_corp_rub": series([56]), "loans_retail_rub": series([65]),
         "deposits_corp_rub": series([76, 80]), "deposits_retail_rub": series([77, 81]),
         "cb_debt_stock": series([71]),
+        # балансовый капитал банковского сектора (акции и другие формы участия в капитале)
+        "equity": series([94]),
     }, index=pd.PeriodIndex(idx, freq="M", name="date"))
     return df
 
@@ -257,7 +262,7 @@ def main(out_dir: Path = OUT_DIR) -> None:
     out.insert(0, "date", out.index.to_timestamp().strftime("%Y-%m-%d"))
     cols = ["date", "key_rate", "key_rate_source", "loans_corp", "loans_retail", "deposits_corp",
             "deposits_retail", "loans_corp_rub", "loans_retail_rub", "deposits_corp_rub", "deposits_retail_rub",
-            "cb_debt_stock", "loan_rate_corp", "loan_rate_retail",
+            "cb_debt_stock", "equity", "loan_rate_corp", "loan_rate_retail",
             "deposit_rate_corp", "deposit_rate_retail", "liquidity_balance",
             "cb_claims_on_banks", "cb_obligations_to_banks"]
     out[cols].round(4).to_csv(out_dir / "cbr_monthly.csv", index=False)

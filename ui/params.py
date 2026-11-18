@@ -100,6 +100,7 @@ GROUPS: dict[str, list[P]] = {
         P("demand.deposit_rate_semielasticity.0", "Чувствительность вкладов орг. к ставке", 0, 4, 0.1, fmt="%.1f"),
         P("demand.deposit_rate_semielasticity.1", "Чувствительность вкладов нас. к ставке", 0, 4, 0.1, fmt="%.1f"),
         P("demand.loan_adjust_speed", "Скорость подстройки кредитов к желаемому уровню", 0.02, 0.6, 0.02),
+        P("demand.backlog_exit", "Уход неудовлетворённого спроса с рынка", 0.0, 1.0, 0.05),
         P("demand.deposit_adjust_speed", "Скорость подстройки вкладов", 0.02, 0.6, 0.02),
         P("demand.credit_deposit_link", "Кредит создаёт вклады (мультипликатор)", 0.0, 1.0, 0.05),
         P("demand.deposit_mobility", "Доля вкладов, ежемесячно меняющая банк", 0.0, 0.2, 0.005, fmt="%.3f"),

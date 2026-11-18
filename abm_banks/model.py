@@ -108,6 +108,7 @@ class BankingModel:
         self.policy = get_policy(policy if policy is not None else config.policy)
 
         self.t = 0                       # глобальный шаг (с учётом прогрева)
+        self._rw_retail_mult = 1.0       # множитель веса риска розницы (сценарий), обновляется каждый месяц
         self._init_banks()
         self._records: list[dict] = []
         self._bank_records: list[dict] = []
@@ -292,9 +293,13 @@ class BankingModel:
     def _liabilities(self) -> np.ndarray:
         return self.D.sum(axis=1) + self._mbk_borrowed() + self.cb_debt
 
+    def _rw_retail(self) -> float:
+        """Вес риска розницы с учётом макропруденциальной надбавки текущего месяца (сценарий)."""
+        return self.cfg.banks.rw_retail * self._rw_retail_mult
+
     def _rwa(self) -> np.ndarray:
         b = self.cfg.banks
-        return (b.rw_corp * self.L[:, C] + b.rw_retail * self.L[:, R]
+        return (b.rw_corp * self.L[:, C] + self._rw_retail() * self.L[:, R]
                 + b.rw_securities * self.sec + b.rw_interbank * self._mbk_lent())
 
     def _car(self) -> np.ndarray:
@@ -331,6 +336,7 @@ class BankingModel:
             "credit_stress": float(scn.credit_stress[t]),
             "deposit_shock": float(scn.deposit_shock[t]),
             "demand_shock": float(scn.demand_shock[t]),
+            "rw_retail_mult": float(scn.rw_retail_mult[t]),
             "panic": panic,
         }
 
@@ -397,6 +403,7 @@ class BankingModel:
         if not self.active.any():
             raise SectorCollapse(f"все банки выбыли к месяцу {t - cfg.burn_in}")
         env = self._environment(t)
+        self._rw_retail_mult = env["rw_retail_mult"]
         k = env["k"]
         flows: dict[str, float] = {}
         n = self.n
@@ -538,12 +545,13 @@ class BankingModel:
     def _lending(self, env: dict, flows: dict, adj: PolicyAdjustments) -> np.ndarray:
         cfg, dm, b = self.cfg, self.cfg.demand, self.cfg.banks
         n = self.n
-        rw = np.array([b.rw_corp, b.rw_retail])
+        rw = np.array([b.rw_corp, self._rw_retail()])
         L_open = self.L.copy()
         L_sys_after = self.L.sum(axis=0)
         # желаемый запас кредитов: тренд × реакция на ставку (частичная подстройка)
         r_bar = self._wavg(self.rate_loan, np.maximum(L_open, 1e-6))
         want = np.zeros(2)
+        target_stock = np.zeros(2)
         for s in (C, R):
             x_star = (-dm.loan_rate_elasticity[s] * (r_bar[s] - self.ref_loan_rate[s])
                       + env["demand_shock"] + dm.demand_noise_sd * self.rng_demand.standard_normal())
@@ -553,6 +561,7 @@ class BankingModel:
             x_prev = np.log(max(self._L_before[s], EPS)) - np.log(prev_trend)
             x_new = x_prev + dm.loan_adjust_speed * (x_star - x_prev)
             target = self.trend_loans[s] * np.exp(x_new)
+            target_stock[s] = target
             want[s] = max(0.0, target - L_sys_after[s])
 
         # распределение спроса по банкам
@@ -591,6 +600,10 @@ class BankingModel:
         self.liq -= new.sum(axis=1)
         flows["new_loans"] = float(new.sum())
         flows["loan_demand_unmet"] = float(max(want.sum() - new.sum(), 0.0))
+        if dm.backlog_exit > 0.0:
+            # неудовлетворённый спрос частично уходит с рынка: тренд подтягивается к фактическому запасу
+            unmet_share = np.clip((want - new.sum(axis=0)) / np.maximum(target_stock, EPS), 0.0, 1.0)
+            self.trend_loans = self.trend_loans * (1.0 - dm.backlog_exit * unmet_share)
         self._r_bar_loan = r_bar
         return new
 
@@ -1122,6 +1135,7 @@ class BankingModel:
         return Scenario(name=self.scenario.name, key_rate=s.key_rate[b:].copy(),
                         credit_stress=s.credit_stress[b:].copy(), confidence=s.confidence[b:].copy(),
                         deposit_shock=s.deposit_shock[b:].copy(), demand_shock=s.demand_shock[b:].copy(),
+                        rw_retail_mult=s.rw_retail_mult[b:].copy(),
                         meta=dict(self.scenario.meta, interventions=list(self.interventions)))
 
     # ---- сеть для визуализации ------------------------------------------

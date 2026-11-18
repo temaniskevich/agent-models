@@ -5,7 +5,8 @@
     python scripts/calibrate.py --window B --budget 400 --seeds 6 --out outputs/theta_window_B.json
 
 Окна: A — калибровка 2010–2013 (только объёмы) → проверка 2014–15; B — калибровка 2017–2021 → проверка 2022;
-C — калибровка по реакциям на ключевую ставку 2014–2019 → проверка реакций 2020–2026.
+C — калибровка по реакциям на ключевую ставку 2014–2019 → проверка реакций 2020–2026;
+D — как C, плюс параметр backlog_exit (итерация 4 протокола IRF).
 Печатает таблицу моментов и ошибки вне выборки, сохраняет параметры в JSON.
 """
 from __future__ import annotations
@@ -24,7 +25,7 @@ from abm_banks.calibration import SMMCalibrator, load_cbr_monthly  # noqa: E402
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--window", choices=["A", "B", "C"], default="B")
+    ap.add_argument("--window", choices=["A", "B", "C", "D"], default="B")
     ap.add_argument("--budget", type=int, default=300)
     ap.add_argument("--seeds", type=int, default=4, help="зёрен на одно вычисление цели")
     ap.add_argument("--method", choices=["lhs_nm", "de", "optuna"], default="lhs_nm")

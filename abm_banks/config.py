@@ -111,6 +111,9 @@ class DemandConfig:
     loan_rate_elasticity: tuple[float, float] = (2.5, 1.8)    # d ln(кредит*) / d ставка (доли)
     deposit_rate_semielasticity: tuple[float, float] = (1.0, 0.8)
     loan_adjust_speed: float = 0.12         # скорость сближения с желаемым запасом (мес.)
+    # доля неудовлетворённого спроса, ежемесячно уходящая с рынка (облигации, валютные и теневые займы, отказ от
+    # кредита): тренд спроса подтягивается к фактическому запасу. 0 — прежнее поведение (невыполненный спрос копится).
+    backlog_exit: float = 0.0
     deposit_adjust_speed: float = 0.20
     loan_maturity_months: tuple[float, float] = (30.0, 36.0)
     credit_deposit_link: float = 0.30       # влияние кредитного разрыва на вклады (денежный мультипликатор)
