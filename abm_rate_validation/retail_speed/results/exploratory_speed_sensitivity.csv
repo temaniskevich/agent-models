@@ -1,0 +1,11 @@
+case,outcome,ratio,lp_rmse
+original,loan_rate_corp,1.0,0.31459733190385725
+original,loan_rate_retail,1.0,0.8052088443683874
+retail_speed,loan_rate_corp,0.35,0.32494279194951586
+retail_speed,loan_rate_retail,0.35,0.17369468574328809
+shared_speed,loan_rate_corp,1.15,0.3517474339698529
+shared_speed,loan_rate_retail,1.15,0.8844663556815776
+shared_at_retail_ratio,loan_rate_corp,0.35,0.4934879159107538
+shared_at_retail_ratio,loan_rate_retail,0.35,0.17867921605556764
+retail_ratio_0.50,loan_rate_corp,0.5,0.3241903751805895
+retail_ratio_0.50,loan_rate_retail,0.5,0.3493717481773213

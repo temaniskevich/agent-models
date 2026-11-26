@@ -1,0 +1,9 @@
+{
+  "retail_speed_rmse_gain_over_original": -0.03917428228497699,
+  "minimum_gain_met": false,
+  "with_retail_speed_beats_real_only": false,
+  "leave_one_month_gain_range": [
+    -0.08055964299199436,
+    -0.028092814997254134
+  ]
+}

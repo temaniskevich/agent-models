@@ -127,7 +127,7 @@ class BankingModel:
 
     def _draw_heterogeneity(self, rng: np.random.Generator, size: int) -> dict[str, np.ndarray]:
         b, ib = self.cfg.banks, self.cfg.interbank
-        return {
+        heterogeneity = {
             "car_target": np.clip(rng.normal(b.car_target_mean, b.car_target_sd, size),
                                   b.car_min + 0.015, 0.22),
             "liq_ratio": np.clip(rng.normal(b.liq_target_mean, b.liq_target_sd, size), 0.02, 0.15),
@@ -135,11 +135,15 @@ class BankingModel:
             "quality": np.exp(rng.normal(0.0, b.quality_sigma, size)),
             "risk_aversion": np.clip(rng.normal(ib.risk_aversion_mean, ib.risk_aversion_sd, size),
                                      0.1, 0.9),
-            "speed_loan": np.clip(rng.normal(b.rate_speed_loan, b.rate_speed_sd, size), 0.05, 0.9),
+            "speed_loan": rng.normal(b.rate_speed_loan, b.rate_speed_sd, size),
             "speed_dep": np.clip(rng.normal(b.rate_speed_deposit, b.rate_speed_sd, size), 0.05, 0.9),
             "appetite": np.exp(rng.normal(0.0, b.appetite_sd, size)),
             "appeal": np.exp(rng.normal(0.0, b.deposit_appeal_sd, size)),
         }
+        raw_speed = heterogeneity["speed_loan"]
+        heterogeneity["speed_loan"] = np.clip(raw_speed, 0.05, 0.9)
+        heterogeneity["speed_loan_retail"] = np.clip(raw_speed + b.rate_speed_loan_retail_shift, 0.05, 0.9)
+        return heterogeneity
 
     def _balance_sheet(self, assets, loans_c, loans_r, car0, liq_ratio, retail_share,
                        mbk_b=0.0, mbk_l=0.0):
@@ -203,6 +207,7 @@ class BankingModel:
         self.car_target, self.liq_ratio = het["car_target"], het["liq_ratio"]
         self.cost_ratio, self.quality = het["cost_ratio"], het["quality"]
         self.risk_aversion, self.speed_loan = het["risk_aversion"], het["speed_loan"]
+        self.speed_loan_retail = het["speed_loan_retail"]
         self.speed_dep, self.appetite = het["speed_dep"], het["appetite"]
         self.appeal = het["appeal"]
 
@@ -348,6 +353,8 @@ class BankingModel:
         trust, car = self.reliability, self._car()
         car_tgt = self.car_target + adj.car_target
         scarcity = np.maximum(car_tgt + 0.01 - car, 0.0)
+        loan_speeds = (self.speed_loan, self.speed_loan_retail) if speed is None else (speed, speed)
+        sd = self.speed_dep if speed is None else speed
         for s in (C, R):
             k_l = self.k_anchor + b.pass_through_loan[s] * (k - self.k_anchor)
             k_d = self.k_anchor + b.pass_through_deposit[s] * (k - self.k_anchor)
@@ -360,9 +367,7 @@ class BankingModel:
                      + b.stress_deposit_premium * self.stress + adj.deposit_spread)
             tgt_l = np.clip(tgt_l, k * 0.5, b.loan_rate_cap)
             tgt_d = np.clip(tgt_d, b.deposit_rate_floor, tgt_l - 0.005)
-            sl = self.speed_loan if speed is None else speed
-            sd = self.speed_dep if speed is None else speed
-            new_l = self.rate_loan[:, s] + sl * (tgt_l - self.rate_loan[:, s])
+            new_l = self.rate_loan[:, s] + loan_speeds[s] * (tgt_l - self.rate_loan[:, s])
             new_d = self.rate_dep[:, s] + sd * (tgt_d - self.rate_dep[:, s])
             self.rate_loan[:, s] = np.where(self.active, new_l, 0.0)
             self.rate_dep[:, s] = np.where(self.active, new_d, 0.0)
@@ -908,6 +913,7 @@ class BankingModel:
         self.car_target[j], self.liq_ratio[j] = het["car_target"][0], het["liq_ratio"][0]
         self.cost_ratio[j], self.quality[j] = het["cost_ratio"][0], het["quality"][0]
         self.risk_aversion[j], self.speed_loan[j] = het["risk_aversion"][0], het["speed_loan"][0]
+        self.speed_loan_retail[j] = het["speed_loan_retail"][0]
         self.speed_dep[j], self.appetite[j] = het["speed_dep"][0], het["appetite"][0]
         self.appeal[j] = het["appeal"][0]
         grow = float(np.mean(self.trend_loans / self.trend_loans0))

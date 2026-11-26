@@ -48,6 +48,12 @@ data, meta = generate_synthetic(cfg, n_runs=2000, outdir="outputs/synthetic_v1",
 ликвидность банковского сектора), собранные скриптом `python -I scripts/fetch_cbr_data.py` с cbr.ru. Для июня 2010 – августа 2013
 ключевая ставка заменена ставкой рефинансирования, внесённой вручную (колонка `key_rate_source`) — сверьте с cbr.ru.
 
+## Исследование прогноза банковских ставок
+
+[Драфт статьи](abm_rate_validation/Драфт%20статьи.md) · [Первый отчёт](abm_rate_validation/Отчёт.md) · [Сравнение прогнозистов и правил АБМ](abm_rate_validation/learner_mechanisms/Отчёт.md).
+
+В каталоге исследования сохранены протоколы, синтетические панели, источники Банка России и прогнозы. Для воспроизведения исследовательских скриптов установите зависимости командой `python -m pip install -r requirements-dev.txt matplotlib pdfplumber`.
+
 ## Структура
 
 ```

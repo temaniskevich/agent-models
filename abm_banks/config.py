@@ -101,6 +101,7 @@ class BankConfig:
     quality_sigma: float = 0.40             # разброс качества заёмщиков между банками
     appetite_sd: float = 0.30               # разброс аппетита к росту кредитов
     deposit_appeal_sd: float = 0.15         # разброс привлекательности по вкладам (бренд, сеть)
+    rate_speed_loan_retail_shift: float = 0.0  # сдвиг скорости по кредитам населению до ограничения
 
 
 @dataclass
@@ -272,6 +273,8 @@ class ModelConfig:
             errors.append("burn_in не может быть отрицательным")
         if b.car_min <= 0 or b.car_target_mean <= b.car_min:
             errors.append("car_target_mean должна быть выше car_min")
+        if not -1.0 <= b.rate_speed_loan_retail_shift <= 1.0:
+            errors.append("rate_speed_loan_retail_shift должен быть в [-1, 1]")
         if not 0.0 <= c.reserve_ratio < 0.5:
             errors.append("reserve_ratio должна быть в [0, 0.5)")
         if self.scenario.kind not in ("constant", "step", "ramp", "path",

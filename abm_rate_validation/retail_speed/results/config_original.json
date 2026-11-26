@@ -1,0 +1,225 @@
+{
+  "n_months": 120,
+  "burn_in": 12,
+  "seed": 0,
+  "start_date": "2010-01",
+  "record_banks": true,
+  "record_network": false,
+  "check_identities": false,
+  "policy": "rule",
+  "sector": {
+    "n_banks": 20,
+    "size_distribution": "top20",
+    "zipf_exponent": 1.0,
+    "lognormal_sigma": 1.2,
+    "top20_tail_share": 0.15,
+    "total_assets_bn": 50000.0,
+    "init_loans_corp": 0.4,
+    "init_loans_retail": 0.17,
+    "init_retail_deposit_share": 0.52,
+    "composition_noise": 0.1,
+    "init_car_excess_mean": 0.015,
+    "init_car_excess_sd": 0.008
+  },
+  "banks": {
+    "car_min": 0.08,
+    "car_target_mean": 0.125,
+    "car_target_sd": 0.01,
+    "rw_corp": 1.0,
+    "rw_retail": 1.2,
+    "rw_securities": 0.4,
+    "rw_interbank": 0.5,
+    "liq_target_mean": 0.06,
+    "liq_target_sd": 0.01,
+    "liq_floor_share": 0.5,
+    "cost_ratio_mean": 0.024,
+    "cost_ratio_sd": 0.004,
+    "tax_rate": 0.2,
+    "payout_ratio": 0.25,
+    "loan_spread": [
+      0.0018762744041857845,
+      0.032190559080046685
+    ],
+    "deposit_spread": [
+      0.02866545945105991,
+      0.03866340037573231
+    ],
+    "risk_pricing": 0.7,
+    "risk_premium_cap": 0.05,
+    "market_power_loan": 0.012,
+    "market_power_deposit": 0.012,
+    "liq_pressure_deposit": 0.3,
+    "liq_pressure_loan": 0.1,
+    "capital_scarcity_loan": 0.5,
+    "stress_deposit_premium": 0.02,
+    "rate_speed_loan": 0.4068371735037831,
+    "rate_speed_loan_retail_shift": 0.0,
+    "rate_speed_deposit": 0.6988004959294698,
+    "rate_speed_sd": 0.06,
+    "pass_through_loan": [
+      1.0,
+      1.0
+    ],
+    "pass_through_deposit": [
+      1.0,
+      1.0
+    ],
+    "loan_rate_cap": 0.6,
+    "deposit_rate_floor": 0.001,
+    "float_share_loans": [
+      0.35,
+      0.1
+    ],
+    "float_share_deposits": [
+      0.4,
+      0.15
+    ],
+    "reliability_scale": 0.03,
+    "reliability_car_ref": 0.1,
+    "reliability_size_weight": 0.35,
+    "securities_yield_spread": 0.01,
+    "securities_mtm_share": 0.2,
+    "securities_sale_haircut": 0.002,
+    "securities_duration": 2.0,
+    "quality_sigma": 0.4,
+    "appetite_sd": 0.3,
+    "deposit_appeal_sd": 0.15
+  },
+  "demand": {
+    "loan_trend_growth": [
+      0.08118183429946875,
+      0.2617473428069469
+    ],
+    "deposit_trend_growth": [
+      0.0673819191886936,
+      0.09743309011093321
+    ],
+    "loan_rate_elasticity": [
+      4.626093929096577,
+      1.8
+    ],
+    "deposit_rate_semielasticity": [
+      1.9474514340754405,
+      0.8
+    ],
+    "loan_adjust_speed": 0.12,
+    "backlog_exit": 0.0,
+    "deposit_adjust_speed": 0.2,
+    "loan_maturity_months": [
+      30.0,
+      36.0
+    ],
+    "credit_deposit_link": 0.3,
+    "demand_noise_sd": 0.004,
+    "deposit_mobility": 0.04,
+    "deposit_rate_sensitivity": 0.35,
+    "deposit_quality_sensitivity": 1.2,
+    "deposit_size_bias": 0.8,
+    "loan_rate_sensitivity": 0.25,
+    "loan_size_bias": 0.8,
+    "flight_to_quality": 2.0,
+    "liq_rationing": 0.5
+  },
+  "credit": {
+    "pd_monthly": [
+      0.002,
+      0.0045
+    ],
+    "lgd": [
+      0.55,
+      0.65
+    ],
+    "rate_sensitivity": [
+      10.0,
+      8.0
+    ],
+    "rate_multiplier_cap": 3.0,
+    "idio_event_prob": 0.004,
+    "idio_loss_median": 0.05,
+    "idio_loss_sigma": 0.9,
+    "noise_sd": 0.15,
+    "pd_smoothing": 0.1,
+    "max_pd": 0.15
+  },
+  "interbank": {
+    "spread_base": 0.002,
+    "spread_risk": 0.015,
+    "rate_cap_over_refi": 0.03,
+    "lend_share": 0.8,
+    "exposure_limit": 0.3,
+    "counterparty_limit": 0.1,
+    "risk_aversion_mean": 0.45,
+    "risk_aversion_sd": 0.1,
+    "link_persistence": 1.5,
+    "max_lenders": 8,
+    "hoarding_sensitivity": 0.6,
+    "hoarding_liq_multiplier": 0.5,
+    "structural_share": 0.045,
+    "borrower_fraction": 0.4,
+    "lender_fraction": 0.4,
+    "panic_freeze": 0.4,
+    "panic_liquidity_demand": 0.6
+  },
+  "cb": {
+    "refi_spread": 0.01,
+    "deposit_spread": 0.01,
+    "reserve_ratio": 0.04,
+    "pledgeable_share": 0.35,
+    "collateral_haircut": 0.2,
+    "tbtf_threshold": 0.05,
+    "bailout_enabled": true,
+    "bailout_target_car": 0.1,
+    "revocation_car": 0.0
+  },
+  "resolution": {
+    "insured_share": [
+      0.0,
+      0.7
+    ],
+    "recovery_loans": [
+      0.55,
+      0.45
+    ],
+    "securities_haircut": 0.05,
+    "deposit_leak": 0.1,
+    "deposit_leak_panic": 0.4,
+    "entry_enabled": true,
+    "entry_delay_months": 3,
+    "entry_size_share": 0.005,
+    "entry_capital_buffer": 0.04
+  },
+  "confidence": {
+    "run_base": 0.001,
+    "run_stress": 0.06,
+    "run_panic": 0.18,
+    "insured_run_dampening": 0.7,
+    "rate_jump_threshold": 0.02,
+    "rate_jump_sensitivity": 8.0,
+    "failure_contagion": 3.0,
+    "panic_decay": 0.8,
+    "stress_smoothing": 0.3
+  },
+  "scenario": {
+    "kind": "constant",
+    "key_rate_start": 0.08,
+    "shock_size": 0.07,
+    "shock_month": 12,
+    "shock_decay_months": 0.0,
+    "ramp_months": 6,
+    "path": null,
+    "historical_start": "2010-01",
+    "jump_rate_per_year": 0.25,
+    "jump_min": 0.05,
+    "jump_max": 0.1,
+    "jump_up_prob": 0.85,
+    "jump_half_life_months": 9.0,
+    "drift_sd": 0.0015,
+    "mean_reversion": 0.03,
+    "key_rate_floor": 0.025,
+    "key_rate_cap": 0.3,
+    "credit_stress_peak": 0.0,
+    "confidence_shock_peak": 0.0,
+    "deposit_shock_peak": 0.0,
+    "demand_shock_peak": 0.0
+  }
+}

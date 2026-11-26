@@ -1,0 +1,6 @@
+{
+  "retail_min_gain_met": true,
+  "corp_guardrail_met": true,
+  "joint_better_than_shared": true,
+  "primary_rule_met": true
+}

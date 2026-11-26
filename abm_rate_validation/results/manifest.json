@@ -1,0 +1,17 @@
+{
+  "abm_rate_validation/backtest.py": "802cc26ed3fceb1cfc252273dc94e11ed13a7a4845cca8c56d24e83c32129025",
+  "abm_rate_validation/check_design.py": "6ee8cad7df365c376332f1feafc649f38103f8f33c05f37030f99d9a9f92303e",
+  "abm_rate_validation/inputs/provenance/data_sources.py": "18e6727afbdff780034e28387c170212c967affae6c01b4fe68ffa7fd45206b8",
+  "abm_rate_validation/reference_forecast.py": "1c24176639b4300a6ab66ed826c1a9f2dea44aa7187f5a57dd66de10c916ea5b",
+  "abm_rate_validation/retail_sensitivity.py": "fb34af3379380f0028bef930ac051295cfba868e1380c1cfbbeefa5ed40198b4",
+  "abm_rate_validation/inputs/provenance/summarize.py": "5d8a2c4767ee0e1e8867adca469384006926fbc2edb3c096d5751eb6c25fe35b",
+  "abm_rate_validation/protocol.json": "a7cd389c8c562c9301f074c02a8f4e9d0ad765be4c88615ed685ca47b33d20e6",
+  "abm_banks/data/cbr_monthly.csv": "5fbcf03b24aa2c0a07ea363f1d9496637600a2faaf3b50941ca6adfc8a7667da",
+  "abm_banks/data/calibrated_window_B.json": "0325eb5d589d1a4cc4e297359da8a610a38cd68a2fa40b76968f79a35f91b878",
+  "abm_rate_validation/inputs/capacity/panel_abm_B.parquet": "8a0c5ed5bb738aedff53fded85cfb5a036696422d2a42b602ad4c9ff5ba9d724",
+  "abm_rate_validation/inputs/capacity/panel_abm_B_r1.parquet": "45e935bf11ed0aa2c524678911617df14a97b92166005c60aa5e2bbd21f6b10e",
+  "abm_rate_validation/inputs/capacity/panel_abm_B_r2.parquet": "91c9317c4cdcb66fb88ea852a4c48cb48981ac3b04a5688255fc0c6240aae197",
+  "abm_rate_validation/inputs/capacity/panel_twin_B.parquet": "1b6b68226b2bdb85799e7e9750823262d5ef0f1c9bd0acece5f51c3d065004b6",
+  "abm_rate_validation/inputs/capacity/panel_twin_B_r1.parquet": "41b1488571e83932811855e01f275ea88e34d045e9562aa5ebd2eadf6e1a19ad",
+  "abm_rate_validation/inputs/capacity/panel_twin_B_r2.parquet": "445a4f7a1de61fe7472857127fa5b92ab7a728ea5672abada9203e639e92afb9"
+}
