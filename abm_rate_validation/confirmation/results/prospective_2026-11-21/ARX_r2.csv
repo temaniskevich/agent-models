@@ -1,0 +1,7 @@
+cohort,model,rep,variant,issue,target,last_bank_rate_month,bank_rate_documented_by,source,fit_through,partial_slope_b,partial_speed_lambda,forecast
+prospective_2026-11-21,ARX,2,real,2026-11-21,2026-12,2026-09,2026-11-10,https://www.cbr.ru/statistics/bank_sector/int_rat/0926/,2026-09,0.7246170264906847,0.12055982568978382,17.14847514840486
+prospective_2026-11-21,ARX,2,abm,2026-11-21,2026-12,2026-09,2026-11-10,https://www.cbr.ru/statistics/bank_sector/int_rat/0926/,2026-09,0.7246170264906847,0.12055982568978382,17.04880698629339
+prospective_2026-11-21,ARX,2,retail_calibrated,2026-11-21,2026-12,2026-09,2026-11-10,https://www.cbr.ru/statistics/bank_sector/int_rat/0926/,2026-09,0.7246170264906847,0.12055982568978382,17.175575912365563
+prospective_2026-11-21,ARX,2,partial,2026-11-21,2026-12,2026-09,2026-11-10,https://www.cbr.ru/statistics/bank_sector/int_rat/0926/,2026-09,0.7246170264906847,0.12055982568978382,17.12837489957249
+prospective_2026-11-21,ARX,2,naive,2026-11-21,2026-12,2026-09,2026-11-10,https://www.cbr.ru/statistics/bank_sector/int_rat/0926/,2026-09,0.7246170264906847,0.12055982568978382,16.55
+prospective_2026-11-21,ARX,2,partial_direct,2026-11-21,2026-12,2026-09,2026-11-10,https://www.cbr.ru/statistics/bank_sector/int_rat/0926/,2026-09,0.7246170264906847,0.12055982568978382,16.920742809531895

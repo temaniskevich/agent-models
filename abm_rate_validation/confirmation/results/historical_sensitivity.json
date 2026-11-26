@@ -1,0 +1,16 @@
+[
+  {
+    "model": "ARX",
+    "months": 12,
+    "calibrated_wins": 9,
+    "leave_one_month_min": 0.984699892511702,
+    "leave_one_month_max": 1.0090484082493505
+  },
+  {
+    "model": "M3",
+    "months": 12,
+    "calibrated_wins": 4,
+    "leave_one_month_min": 1.1640756893389126,
+    "leave_one_month_max": 1.2464600663922394
+  }
+]
