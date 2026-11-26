@@ -34,3 +34,16 @@ def test_validation(bad):
 def test_all_presets_valid():
     for name in PRESET_LABELS:
         preset(name).validate()
+
+
+def test_legacy_config_defaults_to_shared_loan_speed():
+    data = ModelConfig().to_dict()
+    del data["banks"]["rate_speed_loan_retail_shift"]
+    assert ModelConfig.from_dict(data).validate() == ModelConfig()
+
+
+@pytest.mark.parametrize("shift", [float("nan"), float("inf"), -1.01, 1.01])
+def test_retail_speed_shift_validation(shift):
+    cfg = ModelConfig().replace(**{"banks.rate_speed_loan_retail_shift": shift})
+    with pytest.raises(ValueError, match="rate_speed_loan_retail_shift"):
+        cfg.validate()

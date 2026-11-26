@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from abm_banks import BankingModel, ModelConfig, preset
+from abm_banks.policies import PolicyAdjustments
 from abm_banks.scenarios import Scenario, step_path
 
 
@@ -14,6 +15,36 @@ def test_determinism_same_seed_identical():
     cfg = preset("rate_shock").replace(n_months=48)
     a, b = run(cfg, 5).sector, run(cfg, 5).sector
     pd.testing.assert_frame_equal(a, b)
+
+
+def test_retail_speed_shift_only_changes_the_direct_retail_update():
+    cfg = ModelConfig().replace(**{"banks.rate_speed_loan": 0.4, "banks.rate_speed_sd": 0.0})
+    original = BankingModel(cfg, seed=5)
+    slower = BankingModel(cfg.replace(**{"banks.rate_speed_loan_retail_shift": -0.2}), seed=5)
+    starts = original.rate_loan.copy()
+    np.testing.assert_array_equal(starts, slower.rate_loan)
+    np.testing.assert_array_equal(original.rate_dep, slower.rate_dep)
+
+    adj = PolicyAdjustments.zeros(original.n)
+    for model in (original, slower):
+        model._set_rates(model.k_anchor + 0.02, adj)
+
+    np.testing.assert_array_equal(original.rate_loan[:, 0], slower.rate_loan[:, 0])
+    np.testing.assert_array_equal(original.rate_dep, slower.rate_dep)
+    retail_change = original.rate_loan[:, 1] - starts[:, 1]
+    assert np.all(retail_change > 0)
+    np.testing.assert_allclose(slower.rate_loan[:, 1] - starts[:, 1], 0.5 * retail_change)
+
+
+def test_new_bank_uses_retail_speed_shift_after_entry():
+    cfg = ModelConfig().replace(**{"banks.rate_speed_loan": 0.4, "banks.rate_speed_sd": 0.0,
+                                   "banks.rate_speed_loan_retail_shift": -0.8})
+    model = BankingModel(cfg, seed=5)
+    model.active[0] = False
+    model.speed_loan_retail[0] = 0.0
+    model._spawn_bank(0)
+    assert model.speed_loan[0] == pytest.approx(0.4)
+    assert model.speed_loan_retail[0] == pytest.approx(0.05)
 
 
 def test_different_seeds_differ():
